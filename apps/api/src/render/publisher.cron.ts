@@ -121,6 +121,7 @@ export class ZTTeamPublisherCron {
         let shouldPublish = false;
 
         if (schedule_mode === 'fixed') {
+          if (schedule_fixed_times && Array.isArray(schedule_fixed_times) && schedule_fixed_times.length > 0) {
             /** Luôn tính giờ và phút theo múi giờ chuẩn Việt Nam (Asia/Ho_Chi_Minh) */
             const vnFormatter = new Intl.DateTimeFormat('en-US', {
               timeZone: 'Asia/Ho_Chi_Minh',
