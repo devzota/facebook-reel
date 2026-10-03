@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ZTTeamFetcherService } from './fetcher.service';
 import { ZTTeamWordpressService } from '../wordpress/wordpress.service';
 import { ZTTeamStoryTestService } from '../story-test/story-test.service';
-import { ztteam_getImagesPath } from '../common/ztteam_storage.util';
+import { ztteam_getImagesPath, ztteam_getStorageRoot } from '../common/ztteam_storage.util';
 
 @Injectable()
 export class ZTTeamCrawlerService {
@@ -67,6 +67,7 @@ export class ZTTeamCrawlerService {
 
     /** 2. Xử lý ảnh 2K: Tái sử dụng ảnh đã có hoặc chỉ tạo mới khi chưa có / khi người dùng yêu cầu render lại */
     let image2kUrl = existingImageUrl || '';
+    let imageLocalPath = '';
 
     if (!image2kUrl && !forceRecreate) {
       /** Kiểm tra nếu bài viết này đã từng tạo ảnh trong hệ thống trước đó */
@@ -97,9 +98,13 @@ export class ZTTeamCrawlerService {
       });
 
       image2kUrl = imageResult.imageUrl;
+      imageLocalPath = imageResult.localPath;
       this.logger.log(`SangTao.ai 2K image generated: ${image2kUrl}`);
     } else {
       this.logger.log(`Reusing existing 2K image (Tiết kiệm 100% chi phí API): ${image2kUrl}`);
+      if (image2kUrl.startsWith('/storage/')) {
+        imageLocalPath = path.join(ztteam_getStorageRoot(), image2kUrl.replace('/storage/', ''));
+      }
     }
 
     /** 3. Post to WordPress Target Site with 2K image as Featured Media */
@@ -253,14 +258,16 @@ export class ZTTeamCrawlerService {
       try {
         const targetDir = ztteam_getImagesPath(imgRecord.id);
         fs.mkdirSync(targetDir, { recursive: true });
-        fs.copyFileSync(imageResult.localPath, path.join(targetDir, 'output.png'));
+        if (imageLocalPath && fs.existsSync(imageLocalPath)) {
+          fs.copyFileSync(imageLocalPath, path.join(targetDir, 'output.png'));
 
-        await this.prisma.ztteam_images.update({
-          where: { id: imgRecord.id },
-          data: {
-            image_url: `/storage/images/${imgRecord.id}/output.png`,
-          },
-        });
+          await this.prisma.ztteam_images.update({
+            where: { id: imgRecord.id },
+            data: {
+              image_url: `/storage/images/${imgRecord.id}/output.png`,
+            },
+          });
+        }
       } catch (copyErr: any) {
         this.logger.warn(`Failed to copy image to standard folder: ${copyErr.message}`);
       }
