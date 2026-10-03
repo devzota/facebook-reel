@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ZTTeamRole {
+  ADMIN
+  MANAGER
+  EDITOR
+}
+
+enum ZTTeamAssetType {
+  SITE
+  PAGE
+}
+
+model ztteam_users {
+  id            String             @id @default(uuid())
+  email         String             @unique
+  password_hash String
+  role          ZTTeamRole         @default(EDITOR)
+  created_at    DateTime           @default(now())
+  updated_at    DateTime           @updatedAt
+  
+  user_assets   ztteam_user_assets[]
+}
+
+model ztteam_user_assets {
+  id          String           @id @default(uuid())
+  user_id     String
+  asset_type  ZTTeamAssetType
+  asset_id    String           /** Can be site_id or page_id */
+  created_at  DateTime         @default(now())
+
+  user        ztteam_users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, asset_type, asset_id])
+}
+
+model ztteam_fb_accounts {
+  id                    String   @id @default(uuid())
+  fb_user_id            String
+  name                  String
+  user_token_encrypted  String
+  status                String   @default("active")
+  owner_user_id         String
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  
+  pages                 ztteam_pages[]
+}
+
+model ztteam_pages {
+  id                        String   @id @default(uuid())
+  fb_page_id                String
+  name                      String
+  avatar                    String?
+  category                  String?
+  follower_count            Int      @default(0)
+  page_token_encrypted      String
+  fb_account_id             String
+  default_reel_template_id  String?
+  default_image_template_id String?
+  is_active                 Boolean  @default(true)
+  
+  /** Tab 1 & 2 */
+  tags                           String[] @default([])
+  post_format                    String   @default("reel") 
+  
+  /** Tab 3 */
+  auto_publish_enabled           Boolean  @default(true)
+  add_link_to_caption            Boolean  @default(false)
+  add_link_to_comment            Boolean  @default(false)
+  schedule_mode                  String   @default("fixed") 
+  schedule_fixed_times           String[] @default([]) 
+  schedule_immediate_gap_minutes Int      @default(60) 
+  
+  /** Tab 4 */
+  auto_create_enabled            Boolean  @default(false)
+  auto_scan_interval_hours       Int      @default(2)
+  auto_scan_batch_size           Int      @default(1)
+  auto_queue_limit               Int      @default(3)
+  auto_max_post_age_days         Int      @default(1)
+  last_auto_scan_at              DateTime?
+  
+  /** AI Settings */
+  ai_tone                        String   @default("professional")
+  ai_caption_length              String   @default("medium")
+  ai_custom_prompt               String?  @db.Text
+  voice_speed                    Float    @default(1.0)
+
+
+  token_status              String   @default("active")
+  last_checked              DateTime @default(now())
+  
+  fb_account                ztteam_fb_accounts @relation(fields: [fb_account_id], references: [id], onDelete: Cascade)
+  sources                   ztteam_page_sources[]
+  reels                     ztteam_reels[]
+  reel_history              ztteam_reel_history[]
+  images                    ztteam_images[]
+  image_history             ztteam_image_history[]
+  youtube_settings          ztteam_page_youtube_settings?
+}
+
+model ztteam_page_sources {
+  id                 String   @id @default(uuid())
+  page_id            String
+  target_site_id     String
+  target_category_id String?
+  target_tags        String?
+  is_active          Boolean  @default(true)
+  
+  page               ztteam_pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+}
+
+model ztteam_target_sites {
+  id                        String   @id @default(uuid())
+  wp_url                    String
+  wp_username               String
+  wp_app_password_encrypted String
+  status                    String   @default("active")
+  owner_user_id             String
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  crawl_sources             ztteam_crawl_sources[]
+}
+
+model ztteam_crawl_sources {
+  id                 String   @id @default(uuid())
+  target_site_id     String
+  source_url         String
+  source_category    String?
+  extract_rules_json String   /** JSON: { title: "", content: "", thumbnail: "" } */
+  frequency_cron     String
+  enabled            Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  target_site        ztteam_target_sites @relation(fields: [target_site_id], references: [id], onDelete: Cascade)
+  history            ztteam_crawl_history[]
+}
+
+model ztteam_crawl_history {
+  id              String   @id @default(cuid())
+  source_id       String
+  url             String
+  title           String?
+  status          String   @default("SUCCESS")
+  created_at      DateTime @default(now())
+
+  source          ztteam_crawl_sources @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+  @@unique([source_id, url])
+}
+
+model ztteam_templates {
+  id              String   @id @default(cuid())
+  fb_page_id      String?  /** Null = System template, String = Page template */
+  name            String
+  format          String   /** 'video' or 'image' */
+  content_type    String
+  voice_id        String?
+  video_y         Int      @default(0)
+  video_radius    Int      @default(0)
+  html_content    String   @db.Text
+  layout          Json
+  is_default      Boolean  @default(false)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+/** Stores rendered reel videos */
+model ztteam_reels {
+  id              String    @id @default(cuid())
+  page_id         String
+  wp_post_id      String
+  wp_post_title   String
+  wp_post_url     String?
+  source_type     String    @default("WORDPRESS")
+  template_id     String
+  video_url       String?
+  thumbnail_url   String?
+  ai_script       String?   @db.Text
+  ai_caption      String?   @db.Text
+  ai_hook         String?   @db.Text
+  audio_url       String?
+  subtitle_data   Json?
+  status          String    @default("QUEUED") /** QUEUED, RENDERING, COMPLETED, FAILED */
+  error_log       String?   @db.Text
+  progress        Int       @default(0)
+  is_posted         Boolean   @default(false)
+  posted_at         DateTime?
+  fb_post_id        String?
+  post_retry_count  Int       @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  page            ztteam_pages? @relation(fields: [page_id], references: [id], onDelete: Cascade)
+}
+
+model ztteam_settings {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+}
+
+/** Tracks which posts have been used for reels on each page (prevents duplicates) */
+model ztteam_reel_history {
+  id              String   @id @default(cuid())
+  page_id         String
+  wp_post_id      String
+  title           String?  @db.Text
+  description     String?  @db.Text
+  created_at      DateTime @default(now())
+
+  page            ztteam_pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@unique([page_id, wp_post_id])
+}
+
+/** Stores rendered image posts */
+model ztteam_images {
+  id              String    @id @default(cuid())
+  page_id         String
+  wp_post_id      String
+  wp_post_title   String
+  wp_post_url     String?
+  template_id     String
+  image_url       String?
+  ai_caption      String?   @db.Text
+  ai_first_comment String?  @db.Text
+  status          String    @default("QUEUED") /** QUEUED, RENDERING, COMPLETED, FAILED */
+  error_log       String?   @db.Text
+  is_posted         Boolean   @default(false)
+  posted_at         DateTime?
+  fb_post_id        String?
+  post_retry_count  Int       @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  page            ztteam_pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+}
+
+/** Tracks which posts have been used for images on each page */
+model ztteam_image_history {
+  id              String   @id @default(cuid())
+  page_id         String
+  wp_post_id      String
+  created_at      DateTime @default(now())
+
+  page            ztteam_pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+
+  @@unique([page_id, wp_post_id])
+}
+
+model ztteam_youtube_sources {
+  id            String   @id @default(uuid())
+  name          String
+  source_type   String   /** "CHANNEL" or "LINKS" */
+  url           String   @db.Text
+  is_active     Boolean  @default(true)
+  owner_user_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  
+  page_settings ztteam_page_youtube_settings[]
+}
+
+model ztteam_page_youtube_settings {
+  id             String   @id @default(uuid())
+  page_id        String   @unique
+  source_id      String
+  is_active      Boolean  @default(true)
+  
+  /** Custom Render Settings */
+  add_watermark  Boolean  @default(false)
+  watermark_text String?
+  add_frame      Boolean  @default(false)
+
+  page           ztteam_pages           @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  source         ztteam_youtube_sources @relation(fields: [source_id], references: [id], onDelete: Cascade)
+}

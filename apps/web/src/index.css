@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-fb-bg text-fb-text antialiased transition-colors duration-300;
+  }
+  input, select, textarea {
+    outline: none;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-fb-surface rounded-2xl shadow-md border border-white/5 hover:shadow-lg transition-all;
+  }
+}
+
+/** Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #222a3d;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4b6c;
+}

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html class="dark" lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>AI Reels Creator - Tự Động Hóa Facebook</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Fonts: Mulish & Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+
+  <script id="tailwind-config">
+    /**
+     * Tailwind Config - ZTTeam Facebook Theme System (Original Dark Palette & Mulish Font)
+     * Developer: ZTTeam (ztteam.site)
+     */
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "fb-bg": "#0b1326",
+            "fb-surface": "#171f33",
+            "fb-surface-hover": "#222a3d",
+            "fb-blue": "#0866FF",
+            "fb-blue-hover": "#0055D4",
+            "fb-blue-light": "rgba(8, 102, 255, 0.15)",
+            "fb-text": "#dae2fd",
+            "fb-text-muted": "#c2c6d6",
+            "fb-green": "#31A24C",
+            "fb-red": "#FA383E"
+          },
+          fontFamily: {
+            sans: ["Mulish", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-fb-bg text-fb-text font-sans antialiased flex flex-col h-screen overflow-hidden lg:flex-row relative">
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="ztteam-sidebar-overlay" onclick="ztteam_toggleMobileMenu()" class="fixed inset-0 bg-black/60 z-40 hidden lg:hidden backdrop-blur-sm transition-opacity"></div>
+
+  <!-- SideNavBar -->
+  <aside id="ztteam-sidebar" class="fixed top-0 left-0 bottom-0 z-50 w-[260px] bg-fb-surface flex flex-col h-screen transition-transform duration-300 -translate-x-full lg:translate-x-0 shadow-2xl">
+    <div class="p-5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-tr from-blue-600 via-fb-blue to-cyan-400 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/30">
+          f
+        </div>
+        <div>
+          <h1 class="text-base font-black text-fb-text tracking-wide leading-tight">CreatorPro AI</h1>
+          <p class="text-xs font-medium text-fb-text-muted">Tự Động Hóa Facebook</p>
+        </div>
+      </div>
+      <button onclick="ztteam_toggleMobileMenu()" class="lg:hidden text-fb-text-muted hover:text-fb-text p-1 rounded-full">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <!-- Quick Action Button -->
+    <div class="p-4 pt-1">
+      <a href="ai-reels.html" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-fb-blue to-cyan-500 hover:from-fb-blue-hover hover:to-cyan-600 text-white py-2.5 px-5 rounded-full font-bold text-sm transition-all duration-200 shadow-lg shadow-blue-500/25">
+        <span class="material-symbols-outlined text-lg [font-variation-settings:'FILL'_1]">auto_awesome</span>
+        <span>Tạo Reels Mới</span>
+      </a>
+    </div>
+
+    <!-- Nav Menu (Soft Radius Menu Items rounded-xl) -->
+    <nav class="flex-1 px-3 py-2 overflow-y-auto space-y-1">
+      <a href="index.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">dashboard</span>
+        <span class="text-sm">Tổng Quan</span>
+      </a>
+      
+      <a href="campaigns.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">campaign</span>
+        <span class="text-sm">Chiến Dịch</span>
+      </a>
+
+      <!-- Active Item: AI Reels Creator -->
+      <a href="ai-reels.html" class="flex items-center gap-3 px-4 py-2.5 text-cyan-400 font-bold bg-cyan-500/15 rounded-xl transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0 [font-variation-settings:'FILL'_1]">auto_awesome</span>
+        <span class="text-sm">AI Reels Creator</span>
+      </a>
+
+      <a href="media-library.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">perm_media</span>
+        <span class="text-sm">Thư Viện Media</span>
+      </a>
+
+      <a href="analytics.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">analytics</span>
+        <span class="text-sm">Phân Tích</span>
+      </a>
+    </nav>
+
+    <!-- Sidebar Footer -->
+    <div class="p-3">
+      <a href="settings.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">settings</span>
+        <span class="text-sm">Cài Đặt</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper -->
+  <div class="flex-1 flex flex-col min-w-0 lg:pl-[260px] h-screen overflow-hidden">
+    
+    <!-- TopNavBar -->
+    <header class="h-16 bg-fb-surface px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="ztteam_toggleMobileMenu()" class="lg:hidden text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-2xl">menu</span>
+        </button>
+        <div class="relative hidden sm:block w-64 md:w-80">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-fb-text-muted text-xl">search</span>
+          <input type="text" placeholder="Tìm template video..." class="w-full pl-10 pr-4 py-2 bg-fb-surface-hover text-fb-text placeholder:text-fb-text-muted rounded-full text-sm font-medium border-none focus:outline-none focus:ring-2 focus:ring-fb-blue transition-all"/>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button class="relative text-fb-text-muted hover:text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-xl">notifications</span>
+          <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-fb-surface shadow-sm shadow-rose-500/50"></span>
+        </button>
+        
+        <button class="text-fb-text-muted hover:text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-xl">help</span>
+        </button>
+
+        <div class="h-6 w-px bg-fb-surface-hover mx-1"></div>
+
+        <div class="relative ml-1 cursor-pointer group">
+          <div class="w-9 h-9 rounded-full bg-fb-surface-hover overflow-hidden ring-2 ring-cyan-400/30 shrink-0">
+            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6E5oGCf-m4hCvSjlVjUTd9vbvIY2AmSjgoPgKDTBoKfz3atcod9j_4-sEDFwWKoHvf-UaBDPB-yLO38zl4p7o8FC88ilIrBtu9FzacQrXFpIVfmfZMDOeOVJVFny8EKI9OfJPDyq2mZ6tu573uOpSBAhWiBFAUkJOdA-l9ydoTPPlHSBPV_Io9nZU1itH8NxVrB4C0zsxZtSKXL3IjdAG6dMtRWLZb1VntP7J7uQjsZHMn8LSsac" alt="User Profile" class="w-full h-full object-cover"/>
+          </div>
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-fb-surface shadow-sm shadow-emerald-400"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Canvas -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-fb-bg">
+      <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header Banner: Title font-black (900), Subtitle font-medium (500) -->
+        <div class="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-fb-text tracking-tight">AI Reels Creator Studio</h2>
+            <p class="text-sm font-medium text-fb-text-muted mt-1">Biến ý tưởng thành video Facebook Reel 9:16 chất lượng cao chỉ với 1 cú nhấp chuột.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-4 py-1.5 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 shadow-sm shadow-cyan-500/10">
+              Hạn mức còn: 158 / 500 Reels
+            </span>
+          </div>
+        </div>
+
+        <!-- Main Studio Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- Left Configuration Form (8 cols) -->
+          <div class="lg:col-span-7 xl:col-span-8 space-y-5">
+            
+            <!-- Prompt / Script Card -->
+            <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-blue-950/30 p-5 rounded-2xl shadow-lg space-y-4">
+              <div class="flex items-center justify-between">
+                <label class="text-sm font-bold text-fb-text flex items-center gap-2">
+                  <div class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-blue-500/15 text-blue-400">
+                    <span class="material-symbols-outlined text-lg">description</span>
+                  </div>
+                  <span>Kịch Bản Video / Ý Tưởng</span>
+                </label>
+                <button onclick="ztteam_generateAIScript()" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1.5 bg-cyan-500/10 px-3.5 py-1.5 rounded-full border border-cyan-500/20">
+                  <span class="material-symbols-outlined text-sm shrink-0 [font-variation-settings:'FILL'_1]">auto_awesome</span>
+                  <span>Viết kịch bản bằng AI</span>
+                </button>
+              </div>
+
+              <textarea id="ztteam-script-input" rows="5" placeholder="Nhập chủ đề hoặc kịch bản chi tiết cho Reel (Ví dụ: 3 bí quyết tăng doanh số bán hàng online trên Facebook dành cho người mới bắt đầu)..." class="w-full p-4 bg-fb-surface-hover text-fb-text placeholder:text-fb-text-muted rounded-2xl text-sm font-medium border-none focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all resize-none"></textarea>
+            </div>
+
+            <!-- Voice & Audio Settings -->
+            <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 p-5 rounded-2xl shadow-lg space-y-4">
+              <h3 class="text-sm font-bold text-fb-text flex items-center gap-2">
+                <div class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400">
+                  <span class="material-symbols-outlined text-lg">graphic_eq</span>
+                </div>
+                <span>Giọng Đọc AI & Âm Nhạc</span>
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-cyan-400 mb-1.5">Giọng đọc (Voice AI)</label>
+                  <select class="w-full p-3 bg-fb-surface-hover text-fb-text rounded-xl text-xs font-medium border-none focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                    <option>Minh Anh - Nữ miền Nam (Truyền cảm)</option>
+                    <option>Nam Khánh - Nam miền Bắc (Chuyên nghiệp)</option>
+                    <option>Ngọc Hà - Nữ miền Bắc (Tự nhiên)</option>
+                    <option>Hoàng Nam - Nam miền Nam (Năng động)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-blue-400 mb-1.5">Nhạc nền Trending</label>
+                  <select class="w-full p-3 bg-fb-surface-hover text-fb-text rounded-xl text-xs font-medium border-none focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option>Upbeat Business Pop (Trending)</option>
+                    <option>Lo-fi Chill Vibe</option>
+                    <option>Inspiring Cinematic</option>
+                    <option>Không dùng nhạc nền</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Visual Template & Style Options -->
+            <div class="bg-fb-surface p-5 rounded-2xl shadow-lg space-y-4">
+              <h3 class="text-sm font-bold text-fb-text flex items-center gap-2">
+                <div class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <span class="material-symbols-outlined text-lg">palette</span>
+                </div>
+                <span>Phong Cách Video (Template)</span>
+              </h3>
+
+              <div class="grid grid-cols-3 gap-3">
+                <button class="p-3.5 rounded-2xl bg-cyan-500/15 border border-cyan-400 text-left space-y-1 shadow-sm">
+                  <div class="text-xs font-bold text-cyan-400">Năng Động Tech</div>
+                  <div class="text-[11px] font-normal text-fb-text-muted">Chữ chạy nhanh, hiệu ứng chuyển cảnh tự động</div>
+                </button>
+
+                <button class="p-3.5 rounded-2xl bg-fb-surface-hover text-left space-y-1 hover:bg-blue-500/15 hover:border-blue-400 border border-transparent transition-all">
+                  <div class="text-xs font-bold text-fb-text">Tối Giản Clean</div>
+                  <div class="text-[11px] font-normal text-fb-text-muted">Phông nền sạch, chữ hiển thị sắc nét</div>
+                </button>
+
+                <button class="p-3.5 rounded-2xl bg-fb-surface-hover text-left space-y-1 hover:bg-emerald-500/15 hover:border-emerald-400 border border-transparent transition-all">
+                  <div class="text-xs font-bold text-fb-text">Doanh Nghiệp</div>
+                  <div class="text-[11px] font-normal text-fb-text-muted">Tone màu thanh lịch, có Logo thương hiệu</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Button (Pill Button Style - Font Black 900) -->
+            <button onclick="ztteam_renderReel()" class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-fb-blue via-cyan-500 to-emerald-400 hover:opacity-95 text-white font-black text-base transition-all shadow-xl shadow-cyan-500/25 flex items-center justify-center gap-2.5">
+              <span class="material-symbols-outlined text-2xl shrink-0 [font-variation-settings:'FILL'_1]">auto_awesome</span>
+              <span>Render Video AI Reel Ngay</span>
+            </button>
+
+          </div>
+
+          <!-- Right Video Player Preview (4 cols) -->
+          <div class="lg:col-span-5 xl:col-span-4">
+            <div class="bg-fb-surface p-5 rounded-2xl shadow-lg sticky top-6 space-y-4 flex flex-col items-center">
+              <div class="w-full flex items-center justify-between">
+                <h3 class="text-sm font-bold text-fb-text">Xem Trước (Preview 9:16)</h3>
+                <span class="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full">Sẵn sàng</span>
+              </div>
+
+              <!-- Phone Mockup Frame -->
+              <div class="w-56 h-[440px] bg-fb-bg rounded-[2rem] p-2 relative shadow-2xl flex flex-col items-center overflow-hidden ring-4 ring-cyan-500/20">
+                <!-- Phone Screen -->
+                <div class="w-full h-full bg-fb-surface-hover rounded-[1.5rem] relative overflow-hidden flex flex-col justify-between p-3">
+                  
+                  <!-- Top Overlay Info -->
+                  <div class="flex items-center justify-between text-[10px] text-white z-10 font-bold">
+                    <span class="px-2.5 py-0.5 rounded-full bg-black/50 backdrop-blur-sm text-cyan-400">Reels</span>
+                    <span class="material-symbols-outlined text-sm shrink-0">photo_camera</span>
+                  </div>
+
+                  <!-- Center Placeholder Image/Video Cover -->
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/40 flex flex-col justify-center items-center text-center p-4">
+                    <div class="w-14 h-14 shrink-0 rounded-full bg-gradient-to-tr from-fb-blue to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-cyan-500/40 mb-3 animate-pulse">
+                      <span class="material-symbols-outlined text-3xl">play_arrow</span>
+                    </div>
+                    <p class="text-xs text-cyan-300 font-bold italic">"3 mẹo tăng tương tác tự động..."</p>
+                  </div>
+
+                  <!-- Bottom Reel Caption Info -->
+                  <div class="relative z-10 space-y-1.5 text-white text-[10px]">
+                    <div class="flex items-center gap-1.5 font-bold">
+                      <div class="w-4 h-4 rounded-full bg-gradient-to-r from-fb-blue to-cyan-400 shrink-0"></div>
+                      <span>CreatorPro AI</span>
+                    </div>
+                    <p class="text-[9px] font-normal text-white/80 line-clamp-2">Hướng dẫn tạo video Reel thu hút triệu view tự động...</p>
+                  </div>
+
+                </div>
+              </div>
+
+              <div class="w-full text-center text-xs font-medium text-fb-text-muted">
+                Thời lượng dự kiến: <span class="font-bold text-cyan-400">30 Giây</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Info -->
+        <footer class="pt-4 border-t border-fb-surface-hover/30 flex flex-col sm:flex-row items-center justify-between text-xs text-fb-text-muted gap-2 font-medium">
+          <p>© 2026 CreatorPro AI. Phát triển bởi <a href="https://ztteam.site" target="_blank" class="text-blue-400 hover:underline font-bold">ZTTeam</a>.</p>
+          <div class="flex items-center gap-4">
+            <a href="#" class="hover:text-fb-text transition-colors">Điều khoản</a>
+            <a href="#" class="hover:text-fb-text transition-colors">Bảo mật</a>
+            <a href="#" class="hover:text-fb-text transition-colors">Trợ giúp</a>
+          </div>
+        </footer>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    /**
+     * ZTTeam Mobile Sidebar Toggle & AI Script Generator
+     * Developer: ZTTeam (ztteam.site)
+     */
+    function ztteam_toggleMobileMenu() {
+      const sidebar = document.getElementById('ztteam-sidebar');
+      const overlay = document.getElementById('ztteam-sidebar-overlay');
+      if (sidebar && overlay) {
+        sidebar.classList.toggle('-translate-x-full');
+        overlay.classList.toggle('hidden');
+      }
+    }
+
+    function ztteam_generateAIScript() {
+      const input = document.getElementById('ztteam-script-input');
+      if (input) {
+        input.value = "Chào bạn! Đây là 3 mẹo giúp bài viết Facebook của bạn đột phá tương tác:\n1. Sử dụng Reels ngắn dưới 30s chứa thông tin đắt giá.\n2. Lên lịch vào khung giờ vàng 11h30 và 20h00.\n3. Tương tác lại với bình luận trong 15 phút đầu tiên!";
+      }
+    }
+
+    function ztteam_renderReel() {
+      alert("Hệ thống ZTTeam AI đang xử lý Render Video Reel của bạn!");
+    }
+  </script>
+
+</body>
+</html>

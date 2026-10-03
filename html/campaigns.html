@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html class="dark" lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Quản Lý Chiến Dịch - Tự Động Hóa Facebook</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Fonts: Mulish & Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+
+  <script id="tailwind-config">
+    /**
+     * Tailwind Config - ZTTeam Facebook Theme System (Original Dark Palette & Mulish Font)
+     * Developer: ZTTeam (ztteam.site)
+     */
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "fb-bg": "#0b1326",
+            "fb-surface": "#171f33",
+            "fb-surface-hover": "#222a3d",
+            "fb-blue": "#0866FF",
+            "fb-blue-hover": "#0055D4",
+            "fb-blue-light": "rgba(8, 102, 255, 0.15)",
+            "fb-text": "#dae2fd",
+            "fb-text-muted": "#c2c6d6",
+            "fb-green": "#31A24C",
+            "fb-red": "#FA383E"
+          },
+          fontFamily: {
+            sans: ["Mulish", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-fb-bg text-fb-text font-sans antialiased flex flex-col h-screen overflow-hidden lg:flex-row relative">
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="ztteam-sidebar-overlay" onclick="ztteam_toggleMobileMenu()" class="fixed inset-0 bg-black/60 z-40 hidden lg:hidden backdrop-blur-sm transition-opacity"></div>
+
+  <!-- SideNavBar -->
+  <aside id="ztteam-sidebar" class="fixed top-0 left-0 bottom-0 z-50 w-[260px] bg-fb-surface flex flex-col h-screen transition-transform duration-300 -translate-x-full lg:translate-x-0 shadow-2xl">
+    <!-- Sidebar Header -->
+    <div class="p-5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-tr from-blue-600 via-fb-blue to-cyan-400 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/30">
+          f
+        </div>
+        <div>
+          <h1 class="text-base font-black text-fb-text tracking-wide leading-tight">CreatorPro AI</h1>
+          <p class="text-xs font-medium text-fb-text-muted">Tự Động Hóa Facebook</p>
+        </div>
+      </div>
+      <button onclick="ztteam_toggleMobileMenu()" class="lg:hidden text-fb-text-muted hover:text-fb-text p-1 rounded-full">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+
+    <!-- Quick Action Button -->
+    <div class="p-4 pt-1">
+      <a href="ai-reels.html" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-fb-blue to-cyan-500 hover:from-fb-blue-hover hover:to-cyan-600 text-white py-2.5 px-5 rounded-full font-bold text-sm transition-all duration-200 shadow-lg shadow-blue-500/25">
+        <span class="material-symbols-outlined text-lg [font-variation-settings:'FILL'_1]">auto_awesome</span>
+        <span>Tạo Reels Mới</span>
+      </a>
+    </div>
+
+    <!-- Nav Menu (Soft Radius Menu Items rounded-xl) -->
+    <nav class="flex-1 px-3 py-2 overflow-y-auto space-y-1">
+      <a href="index.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">dashboard</span>
+        <span class="text-sm">Tổng Quan</span>
+      </a>
+      
+      <!-- Active Item: Campaigns -->
+      <a href="campaigns.html" class="flex items-center gap-3 px-4 py-2.5 text-blue-400 font-bold bg-blue-500/15 rounded-xl transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">campaign</span>
+        <span class="text-sm">Chiến Dịch</span>
+      </a>
+
+      <a href="ai-reels.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0 [font-variation-settings:'FILL'_1]">auto_awesome</span>
+        <span class="text-sm">AI Reels Creator</span>
+      </a>
+
+      <a href="media-library.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">perm_media</span>
+        <span class="text-sm">Thư Viện Media</span>
+      </a>
+
+      <a href="analytics.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">analytics</span>
+        <span class="text-sm">Phân Tích</span>
+      </a>
+    </nav>
+
+    <!-- Sidebar Footer -->
+    <div class="p-3">
+      <a href="settings.html" class="flex items-center gap-3 px-4 py-2.5 text-fb-text-muted hover:bg-fb-surface-hover hover:text-fb-text rounded-xl font-semibold transition-colors">
+        <span class="material-symbols-outlined text-xl shrink-0">settings</span>
+        <span class="text-sm">Cài Đặt</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper -->
+  <div class="flex-1 flex flex-col min-w-0 lg:pl-[260px] h-screen overflow-hidden">
+    
+    <!-- TopNavBar -->
+    <header class="h-16 bg-fb-surface px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="ztteam_toggleMobileMenu()" class="lg:hidden text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-2xl">menu</span>
+        </button>
+        <div class="relative hidden sm:block w-64 md:w-80">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-fb-text-muted text-xl">search</span>
+          <input type="text" placeholder="Tìm chiến dịch..." class="w-full pl-10 pr-4 py-2 bg-fb-surface-hover text-fb-text placeholder:text-fb-text-muted rounded-full text-sm font-medium border-none focus:outline-none focus:ring-2 focus:ring-fb-blue transition-all"/>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button class="relative text-fb-text-muted hover:text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-xl">notifications</span>
+          <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-fb-surface shadow-sm shadow-rose-500/50"></span>
+        </button>
+        
+        <button class="text-fb-text-muted hover:text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors">
+          <span class="material-symbols-outlined text-xl">help</span>
+        </button>
+
+        <div class="h-6 w-px bg-fb-surface-hover mx-1"></div>
+
+        <button class="bg-gradient-to-r from-fb-blue to-cyan-500 hover:opacity-90 text-white px-4 py-2 rounded-full text-xs font-bold transition-colors shadow-md shadow-blue-500/20 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-base shrink-0">add</span>
+          <span>Tạo Chiến Dịch</span>
+        </button>
+
+        <div class="relative ml-1 cursor-pointer group">
+          <div class="w-9 h-9 rounded-full bg-fb-surface-hover overflow-hidden ring-2 ring-fb-blue/30 shrink-0">
+            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6E5oGCf-m4hCvSjlVjUTd9vbvIY2AmSjgoPgKDTBoKfz3atcod9j_4-sEDFwWKoHvf-UaBDPB-yLO38zl4p7o8FC88ilIrBtu9FzacQrXFpIVfmfZMDOeOVJVFny8EKI9OfJPDyq2mZ6tu573uOpSBAhWiBFAUkJOdA-l9ydoTPPlHSBPV_Io9nZU1itH8NxVrB4C0zsxZtSKXL3IjdAG6dMtRWLZb1VntP7J7uQjsZHMn8LSsac" alt="User Profile" class="w-full h-full object-cover"/>
+          </div>
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-fb-surface shadow-sm shadow-emerald-400"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Canvas -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-fb-bg">
+      <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header Banner: Title font-black (900), Subtitle font-medium (500) -->
+        <div class="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Quản Lý Chiến Dịch</h2>
+            <p class="text-sm font-medium text-fb-text-muted mt-1">Theo dõi, lên lịch và tối ưu hóa các chiến dịch tự động trên Trang Facebook.</p>
+          </div>
+          <button class="bg-gradient-to-r from-fb-blue to-cyan-500 hover:opacity-90 text-white px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 self-start sm:self-auto">
+            <span class="material-symbols-outlined text-lg shrink-0">add_circle</span>
+            <span>Chiến Dịch Mới</span>
+          </button>
+        </div>
+
+        <!-- Summary Cards Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-blue-950/40 p-4 rounded-2xl shadow-lg">
+            <p class="text-xs text-blue-400 font-bold uppercase tracking-wider">Tổng chiến dịch</p>
+            <h4 class="text-2xl font-black text-fb-text mt-1">18</h4>
+          </div>
+
+          <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/40 p-4 rounded-2xl shadow-lg">
+            <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider">Đang hoạt động</p>
+            <h4 class="text-2xl font-black text-emerald-400 mt-1">6</h4>
+          </div>
+
+          <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/40 p-4 rounded-2xl shadow-lg">
+            <p class="text-xs text-cyan-400 font-bold uppercase tracking-wider">Đã đăng tuần này</p>
+            <h4 class="text-2xl font-black text-cyan-300 mt-1">142 bài</h4>
+          </div>
+
+          <div class="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/40 p-4 rounded-2xl shadow-lg">
+            <p class="text-xs text-amber-400 font-bold uppercase tracking-wider">Tỷ lệ thành công</p>
+            <h4 class="text-2xl font-black text-amber-400 mt-1">99.2%</h4>
+          </div>
+        </div>
+
+        <!-- Filter Bar & Table Container -->
+        <div class="bg-fb-surface rounded-2xl shadow-lg overflow-hidden">
+          <!-- Filter Tabs -->
+          <div class="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-fb-surface-hover/50">
+            <div class="flex items-center gap-1.5 bg-fb-surface-hover p-1.5 rounded-full overflow-x-auto max-w-full">
+              <button class="px-4 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-fb-blue to-cyan-500 text-white shadow-md shadow-blue-500/20">Tất cả (18)</button>
+              <button class="px-4 py-1.5 rounded-full text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 transition-colors">Đang chạy (6)</button>
+              <button class="px-4 py-1.5 rounded-full text-xs font-semibold text-cyan-400 hover:bg-cyan-500/10 transition-colors">Đã lên lịch (8)</button>
+              <button class="px-4 py-1.5 rounded-full text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors">Tạm dừng (2)</button>
+              <button class="px-4 py-1.5 rounded-full text-xs font-semibold text-fb-text-muted hover:text-fb-text transition-colors">Hoàn thành (2)</button>
+            </div>
+
+            <div class="flex items-center gap-2 self-end sm:self-auto">
+              <button class="px-4 py-1.5 rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-fb-text text-xs font-medium flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-base shrink-0">filter_list</span>
+                <span>Lọc</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Campaigns Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-fb-text">
+              <thead class="bg-fb-surface-hover/60 text-fb-text-muted uppercase text-[11px] font-extrabold tracking-wider">
+                <tr>
+                  <th class="py-4 px-5">Tên Chiến Dịch</th>
+                  <th class="py-4 px-4">Trang FB Áp Dụng</th>
+                  <th class="py-4 px-4">Tiến Độ / Bài Đăng</th>
+                  <th class="py-4 px-4">Lượt Tiếp Cận</th>
+                  <th class="py-4 px-4">Trạng Thái</th>
+                  <th class="py-4 px-5 text-right">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-fb-surface-hover/30">
+                <!-- Row 1 -->
+                <tr class="hover:bg-fb-surface-hover/50 transition-colors">
+                  <td class="py-4 px-5">
+                    <div class="font-bold text-sm text-fb-text">AI Reels Quảng Bá Sản Phẩm Q3</div>
+                    <div class="text-cyan-400 text-[11px] mt-0.5 font-medium flex items-center gap-1">
+                      <span class="material-symbols-outlined text-xs shrink-0">auto_awesome</span>
+                      <span>Tạo tự động 2 bài / ngày</span>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-semibold text-blue-300">Tech Insight Official</td>
+                  <td class="py-4 px-4">
+                    <div class="font-bold text-fb-text">24 / 30 bài</div>
+                    <div class="w-28 h-2 bg-fb-surface-hover rounded-full mt-1.5 overflow-hidden">
+                      <div class="h-full bg-gradient-to-r from-cyan-400 to-fb-blue rounded-full w-[80%] shadow-[0_0_8px_rgba(56,189,248,0.5)]"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-black text-emerald-400">28.4K</td>
+                  <td class="py-4 px-4">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+                      Đang chạy
+                    </span>
+                  </td>
+                  <td class="py-4 px-5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-blue-500/15 text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">edit</span>
+                      </button>
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">pause_circle</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 2 -->
+                <tr class="hover:bg-fb-surface-hover/50 transition-colors">
+                  <td class="py-4 px-5">
+                    <div class="font-bold text-sm text-fb-text">Chuỗi Bài Viết Mẹo Marketing</div>
+                    <div class="text-fb-text-muted text-[11px] font-normal mt-0.5">Bài viết tĩnh + Carousel</div>
+                  </td>
+                  <td class="py-4 px-4 font-semibold text-blue-300">Digital Hub VN</td>
+                  <td class="py-4 px-4">
+                    <div class="font-bold text-fb-text">12 / 15 bài</div>
+                    <div class="w-28 h-2 bg-fb-surface-hover rounded-full mt-1.5 overflow-hidden">
+                      <div class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full w-[65%]"></div>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 font-black text-emerald-400">14.1K</td>
+                  <td class="py-4 px-4">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">
+                      <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+                      Đã lên lịch
+                    </span>
+                  </td>
+                  <td class="py-4 px-5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-blue-500/15 text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">edit</span>
+                      </button>
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">pause_circle</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Row 3 -->
+                <tr class="hover:bg-fb-surface-hover/50 transition-colors">
+                  <td class="py-4 px-5">
+                    <div class="font-bold text-sm text-fb-text">Tương Tác Fanpage Tự Động</div>
+                    <div class="text-fb-text-muted text-[11px] font-normal mt-0.5">Trả lời bình luận & Chatbot</div>
+                  </td>
+                  <td class="py-4 px-4 font-semibold text-blue-300">Creator Store</td>
+                  <td class="py-4 px-4">
+                    <div class="font-bold text-fb-text">Liên tục 24/7</div>
+                  </td>
+                  <td class="py-4 px-4 font-black text-emerald-400">5.8K</td>
+                  <td class="py-4 px-4">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+                      Đang chạy
+                    </span>
+                  </td>
+                  <td class="py-4 px-5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-blue-500/15 text-blue-400 hover:bg-blue-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">edit</span>
+                      </button>
+                      <button class="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-white transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-base">pause_circle</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Footer Info -->
+        <footer class="pt-4 border-t border-fb-surface-hover/30 flex flex-col sm:flex-row items-center justify-between text-xs text-fb-text-muted gap-2 font-medium">
+          <p>© 2026 CreatorPro AI. Phát triển bởi <a href="https://ztteam.site" target="_blank" class="text-blue-400 hover:underline font-bold">ZTTeam</a>.</p>
+          <div class="flex items-center gap-4">
+            <a href="#" class="hover:text-fb-text transition-colors">Điều khoản</a>
+            <a href="#" class="hover:text-fb-text transition-colors">Bảo mật</a>
+            <a href="#" class="hover:text-fb-text transition-colors">Trợ giúp</a>
+          </div>
+        </footer>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    /**
+     * ZTTeam Mobile Sidebar Toggle Functionality
+     * Developer: ZTTeam (ztteam.site)
+     */
+    function ztteam_toggleMobileMenu() {
+      const sidebar = document.getElementById('ztteam-sidebar');
+      const overlay = document.getElementById('ztteam-sidebar-overlay');
+      if (sidebar && overlay) {
+        sidebar.classList.toggle('-translate-x-full');
+        overlay.classList.toggle('hidden');
+      }
+    }
+  </script>
+
+</body>
+</html>
