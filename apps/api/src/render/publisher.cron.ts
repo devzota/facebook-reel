@@ -121,8 +121,17 @@ export class ZTTeamPublisherCron {
         let shouldPublish = false;
 
         if (schedule_mode === 'fixed') {
-          if (schedule_fixed_times && Array.isArray(schedule_fixed_times) && schedule_fixed_times.length > 0) {
-            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            /** Luôn tính giờ và phút theo múi giờ chuẩn Việt Nam (Asia/Ho_Chi_Minh) */
+            const vnFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'Asia/Ho_Chi_Minh',
+              hour: 'numeric',
+              minute: 'numeric',
+              hour12: false,
+            });
+            const parts = vnFormatter.formatToParts(now);
+            const vnH = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+            const vnM = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+            const currentMinutes = vnH * 60 + vnM;
 
             for (const time of schedule_fixed_times as string[]) {
               const [h, m] = time.split(':').map(Number);

@@ -161,13 +161,43 @@ export default function ZTTeamAIPostCard({
               {resolvedPageName}
             </h4>
             <div className="flex items-center gap-1.5 text-[11px] text-fb-text-muted mt-0.5">
-              <span>{ztteam_formatDate(displayTime)}</span>
+              <span>{isAlreadyPosted ? `Đã đăng: ${ztteam_formatDate(item.posted_at || item.updated_at)}` : item.scheduled_at ? `Dự kiến: ${ztteam_formatDate(item.scheduled_at)}` : `Tạo lúc: ${ztteam_formatDate(item.created_at)}`}</span>
               <span>•</span>
               <span className="material-symbols-outlined text-[13px]">public</span>
             </div>
           </div>
         </div>
         <div>{ztteam_renderStatusBadge()}</div>
+      </div>
+
+      {/** 2.1. Timeline Info Bar (Thời gian tạo bài, tạo ảnh, lịch đăng dự kiến, thời điểm đã đăng) */}
+      <div className="px-4 py-2 bg-fb-surface-hover/20 border-y border-fb-surface-hover/40 grid grid-cols-2 gap-2 text-[11px]">
+        <div className="flex items-center gap-1.5 text-fb-text-muted truncate">
+          <span className="material-symbols-outlined text-[14px] text-cyan-400 shrink-0">edit_calendar</span>
+          <span className="truncate">Tạo bài: <strong className="text-white/80 font-medium">{ztteam_formatDate(item.created_at)}</strong></span>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-fb-text-muted truncate">
+          <span className="material-symbols-outlined text-[14px] text-blue-400 shrink-0">image</span>
+          <span className="truncate">Tạo ảnh: <strong className="text-white/80 font-medium">{item.image_url ? ztteam_formatDate(item.updated_at) : 'Đang xử lý'}</strong></span>
+        </div>
+
+        {isAlreadyPosted ? (
+          <div className="col-span-2 flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+            <span className="material-symbols-outlined text-[15px] shrink-0">check_circle</span>
+            <span className="font-semibold">Đã đăng FB: {ztteam_formatDate(item.posted_at || item.updated_at)}</span>
+          </div>
+        ) : item.scheduled_at ? (
+          <div className="col-span-2 flex items-center gap-1.5 text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
+            <span className="material-symbols-outlined text-[15px] shrink-0">schedule</span>
+            <span className="font-semibold">Lịch đăng dự kiến: {ztteam_formatDate(item.scheduled_at)}</span>
+          </div>
+        ) : (
+          <div className="col-span-2 flex items-center gap-1.5 text-fb-text-muted bg-fb-surface-hover/40 px-2 py-1 rounded-lg border border-white/5">
+            <span className="material-symbols-outlined text-[15px] shrink-0">pause_circle</span>
+            <span>Chờ xếp lịch hoặc đăng thủ công</span>
+          </div>
+        )}
       </div>
 
       {/** 3. Post Title - UPPERCASE Hook */}
