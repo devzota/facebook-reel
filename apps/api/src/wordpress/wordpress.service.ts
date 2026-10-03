@@ -32,12 +32,37 @@ export class ZTTeamWordpressService {
 
   private ztteam_decrypt(encryptedText: string): string {
     if (!encryptedText) return '';
+    const [ivHex, encrypted] = encryptedText.split(':');
+    if (!ivHex || !encrypted) return encryptedText;
+
+    /** 1. Thử giải mã với khóa cấu hình hiện tại */
     try {
-      const [ivHex, encrypted] = encryptedText.split(':');
-      if (!ivHex || !encrypted) return encryptedText;
-      
       const iv = Buffer.from(ivHex, 'hex');
       const decipher = crypto.createDecipheriv('aes-256-cbc', this.encryptionKey, iv);
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch {
+      /** Tiếp tục thử với các khóa dự phòng */
+    }
+
+    /** 2. Thử giải mã với default secret key */
+    try {
+      const fallbackKey = crypto.scryptSync('default-secret-key-32-chars-long!', 'salt', 32);
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', fallbackKey, iv);
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch {
+      /** Tiếp tục thử với khóa production */
+    }
+
+    /** 3. Thử với key ZTREEL_SECRET_KEY_2026 */
+    try {
+      const fallbackKey2 = crypto.scryptSync('ZTREEL_SECRET_KEY_2026', 'salt', 32);
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', fallbackKey2, iv);
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
       return decrypted;
@@ -51,7 +76,7 @@ export class ZTTeamWordpressService {
     try {
       const cleanUrl = wpUrl.replace(/\/$/, '');
       const authHeader = 'Basic ' + Buffer.from(`${wpUsername}:${wpAppPassword}`).toString('base64');
-      
+
       const response = await firstValueFrom(
         this.httpService.get(`${cleanUrl}/wp-json/wp/v2/users/me`, {
           headers: {
@@ -59,7 +84,7 @@ export class ZTTeamWordpressService {
           },
         })
       );
-      
+
       return { success: true, data: { id: response.data.id, name: response.data.name } };
     } catch (error: any) {
       this.logger.error('WordPress connection test failed', error.response?.data || error.message);
@@ -70,9 +95,18 @@ export class ZTTeamWordpressService {
     }
   }
 
+  /** Pre-flight check: Xác thực trang WordPress đích trước khi gọi AI tạo ảnh tốn phí */
+  async ztteam_verifySite(targetSiteId: string): Promise<boolean> {
+    const site = await this.prisma.ztteam_target_sites.findUnique({ where: { id: targetSiteId } });
+    if (!site) throw new HttpException(`Target site ${targetSiteId} not found`, HttpStatus.BAD_REQUEST);
+    const decryptedPassword = this.ztteam_decrypt(site.wp_app_password_encrypted);
+    await this.ztteam_testConnection(site.wp_url, site.wp_username, decryptedPassword);
+    return true;
+  }
+
   async ztteam_createTargetSite(userId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword: string }) {
     await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
-    
+
     return this.prisma.ztteam_target_sites.create({
       data: {
         owner_user_id: userId,
@@ -88,12 +122,12 @@ export class ZTTeamWordpressService {
     if (data.wpAppPassword) {
       await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
     }
-    
+
     const updateData: any = {
       wp_url: data.wpUrl,
       wp_username: data.wpUsername,
     };
-    
+
     if (data.wpAppPassword) {
       updateData.wp_app_password_encrypted = this.ztteam_encrypt(data.wpAppPassword);
     }
@@ -133,10 +167,10 @@ export class ZTTeamWordpressService {
   }
 
   async ztteam_uploadMedia(
-    wpUrl: string, 
-    authHeader: string, 
-    buffer: Buffer, 
-    filename: string, 
+    wpUrl: string,
+    authHeader: string,
+    buffer: Buffer,
+    filename: string,
     mimeType: string
   ): Promise<{ id: number; source_url: string }> {
     try {
@@ -271,8 +305,8 @@ export class ZTTeamWordpressService {
           if (data.imageUrl.startsWith('http://') || data.imageUrl.startsWith('https://')) {
             /** Download the image via HTTP */
             const imageRes = await firstValueFrom(
-              this.httpService.get(data.imageUrl, { 
-                responseType: 'arraybuffer', 
+              this.httpService.get(data.imageUrl, {
+                responseType: 'arraybuffer',
                 timeout: 20000,
                 headers: {
                   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -297,7 +331,7 @@ export class ZTTeamWordpressService {
           }
 
           const mimeType = ext.toLowerCase() === 'png' ? 'image/png' : ext.toLowerCase() === 'webp' ? 'image/webp' : 'image/jpeg';
-          
+
           /** Upload to WP and set featured_media */
           const media = await this.ztteam_uploadMedia(cleanUrl, authHeader, buffer, `thumbnail_${Date.now()}.${ext}`, mimeType);
           if (media && media.id) {
@@ -316,7 +350,7 @@ export class ZTTeamWordpressService {
           params: { search: data.title, status: 'any' }
         })
       );
-      
+
       const existingPost = searchResponse.data.find((p: any) => p.title.rendered === data.title || p.title.raw === data.title);
 
       let response;
@@ -385,7 +419,7 @@ export class ZTTeamWordpressService {
           timeout: 10000,
         })
       );
-      
+
       return response.data.map((cat: any) => ({
         id: cat.id,
         name: cat.name,
@@ -419,7 +453,7 @@ export class ZTTeamWordpressService {
           timeout: 10000,
         })
       );
-      
+
       return response.data.map((tag: any) => ({
         id: tag.id,
         name: tag.name,
@@ -449,7 +483,7 @@ export class ZTTeamWordpressService {
       const params: any = { per_page: 20, _embed: 1 };
       if (categoryId) params.categories = categoryId;
       if (targetTags) params.tags = targetTags;
-      
+
       const response = await firstValueFrom(
         this.httpService.get(`${wpUrl}/wp-json/wp/v2/posts`, {
           headers: { Authorization: authHeader },
@@ -457,7 +491,7 @@ export class ZTTeamWordpressService {
           timeout: 12000,
         })
       );
-      
+
       return response.data.map((p: any) => {
         const rawContent = p.content?.rendered || p.title?.rendered || '';
         const cleanContent = rawContent.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
@@ -518,7 +552,7 @@ export class ZTTeamWordpressService {
           timeout: 10000,
         })
       );
-      
+
       if (response.data && response.data.length > 0) {
         const post = response.data[0];
         /** Strip HTML from content */

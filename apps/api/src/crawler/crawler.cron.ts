@@ -220,8 +220,20 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
       }
     } catch (e) {}
 
+    let attemptCount = 0;
+
     for (const url of urlsToFetch) {
-      if (processedCount >= maxArticlesPerCycle) {
+      if (attemptCount >= maxArticlesPerCycle) {
+        break;
+      }
+
+      /** Kiểm tra thời gian thực: Nếu người dùng đã gạt TẮT nguồn này, dừng ngay lập tức */
+      const freshSource = await this.prisma.ztteam_crawl_sources.findUnique({
+        where: { id: source.id },
+        select: { enabled: true }
+      });
+      if (!freshSource || !freshSource.enabled) {
+        this.logger.log(`Source ${source.id} was toggled OFF by user. Stopping crawl loop immediately.`);
         break;
       }
 
@@ -252,8 +264,9 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
 
         this.logger.log(`Successfully processed story: "${result.title}" -> WP: ${result.wpPostUrl} | Fanpage Ready: ${result.imageId || 'N/A'}`);
         processedCount++;
-        /** If batch limit reached, will exit naturally on next iteration */
+        attemptCount++;
       } catch (err: any) {
+        attemptCount++; /** Tăng lượt thử để không bao giờ chạy tràn lan khi lỗi */
         this.logger.error(`Failed to process URL ${url}: ${err.message}`);
         
         let sourceName = source.name || 'Không rõ';
@@ -282,6 +295,16 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
           });
         } catch (e) {
           /** Ignore upsert error */
+        }
+
+        /** Circuit breaker: Nếu lỗi xác thực WordPress hoặc lỗi hệ thống nghiêm trọng, ngắt ngay vòng lặp */
+        const isAuthOrForbidden = err.message?.toLowerCase().includes('forbidden') || 
+                                 err.message?.toLowerCase().includes('401') || 
+                                 err.message?.toLowerCase().includes('unauthorized') ||
+                                 err.message?.toLowerCase().includes('status is forbidden');
+        if (isAuthOrForbidden) {
+          this.logger.error(`Circuit breaker triggered: WordPress auth error. Aborting remaining URLs to protect API quota.`);
+          break;
         }
       }
     }

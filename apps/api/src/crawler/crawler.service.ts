@@ -36,6 +36,8 @@ export class ZTTeamCrawlerService {
     pageId?: string;
     addLinkToComment?: boolean;
     sourceCategory?: string;
+    existingImageUrl?: string;
+    forceRecreate?: boolean;
   }): Promise<{
     success: boolean;
     title: string;
@@ -47,9 +49,12 @@ export class ZTTeamCrawlerService {
     pageId?: string;
     imageId?: string;
   }> {
-    const { sourceUrl, targetSiteId, pageId, addLinkToComment = true, sourceCategory } = params;
+    const { sourceUrl, targetSiteId, pageId, addLinkToComment = true, sourceCategory, existingImageUrl, forceRecreate = false } = params;
 
     this.logger.log(`Starting Crawl -> 2K AI Image -> WordPress -> Fanpage pipeline for: ${sourceUrl}`);
+
+    /** 0. PRE-FLIGHT CHECK: Xác thực quyền WordPress trước khi gọi AI tạo ảnh tốn phí */
+    await this.wordpressService.ztteam_verifySite(targetSiteId);
 
     /** 1. Fetch & clean story from source URL */
     const storyData = await this.fetcherService.ztteam_fetchUrlData(sourceUrl);
@@ -60,21 +65,42 @@ export class ZTTeamCrawlerService {
     const cleanContent = this.fetcherService.ztteam_cleanStoryContent(storyData.content);
     const storyTitle = storyData.title.trim();
 
-    /** 2. AI generates scene prompt & renders 2K Image via SangTao.ai */
-    this.logger.log(`Analyzing story and generating 2K image via SangTao.ai for "${storyTitle}"...`);
-    const promptData = await this.storyTestService.ztteam_generateStoryImagePrompt(
-      cleanContent,
-      'cinematic',
-      '4:5',
-    );
+    /** 2. Xử lý ảnh 2K: Tái sử dụng ảnh đã có hoặc chỉ tạo mới khi chưa có / khi người dùng yêu cầu render lại */
+    let image2kUrl = existingImageUrl || '';
 
-    const imageResult = await this.storyTestService.ztteam_renderStoryImage({
-      prompt: promptData.image_prompt_en,
-      aspectRatio: '4:5',
-    });
+    if (!image2kUrl && !forceRecreate) {
+      /** Kiểm tra nếu bài viết này đã từng tạo ảnh trong hệ thống trước đó */
+      const existingImgRecord = await this.prisma.ztteam_images.findFirst({
+        where: {
+          wp_post_title: storyTitle,
+          image_url: { not: null }
+        },
+        select: { image_url: true }
+      });
+      if (existingImgRecord && existingImgRecord.image_url) {
+        image2kUrl = existingImgRecord.image_url;
+      }
+    }
 
-    const image2kUrl = imageResult.imageUrl;
-    this.logger.log(`SangTao.ai 2K image generated: ${image2kUrl}`);
+    if (!image2kUrl || forceRecreate) {
+      /** Chỉ khi chưa có ảnh sẵn hoặc người dùng bấm render lại thủ công mới gọi SangTao.ai */
+      this.logger.log(`Analyzing story and generating 2K image via SangTao.ai for "${storyTitle}"...`);
+      const promptData = await this.storyTestService.ztteam_generateStoryImagePrompt(
+        cleanContent,
+        'cinematic',
+        '4:5',
+      );
+
+      const imageResult = await this.storyTestService.ztteam_renderStoryImage({
+        prompt: promptData.image_prompt_en,
+        aspectRatio: '4:5',
+      });
+
+      image2kUrl = imageResult.imageUrl;
+      this.logger.log(`SangTao.ai 2K image generated: ${image2kUrl}`);
+    } else {
+      this.logger.log(`Reusing existing 2K image (Tiết kiệm 100% chi phí API): ${image2kUrl}`);
+    }
 
     /** 3. Post to WordPress Target Site with 2K image as Featured Media */
     const wpResult = await this.wordpressService.ztteam_createPost(targetSiteId, {
