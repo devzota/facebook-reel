@@ -15,6 +15,7 @@ function ztteam_cronToLabel(cron: string): string {
     '0 */1 * * *': 'Mỗi 1 giờ',
     '0 */2 * * *': 'Mỗi 2 giờ',
     '0 */3 * * *': 'Mỗi 3 giờ',
+    '0 */4 * * *': 'Mỗi 4 giờ (Tối ưu 1 Page 5 bài/ngày)',
     '0 */6 * * *': 'Mỗi 6 giờ',
     '0 */12 * * *': 'Mỗi 12 giờ',
     '0 0 * * *': 'Mỗi 24 giờ'
@@ -567,9 +568,10 @@ export default function WordPressSites() {
                                     { value: '0 */5 * * * *', label: '5 phút' },
                                     { value: '0 */15 * * * *', label: '15 phút' },
                                     { value: '0 */30 * * * *', label: '30 phút' },
-                                    { value: '0 */1 * * *', label: '1 tiếng' },
-                                    { value: '0 */2 * * *', label: '2 tiếng' },
+                                    { value: '0 */1 * * *', label: '1 tiếng (Cho 4-5 Page)' },
+                                    { value: '0 */2 * * *', label: '2 tiếng (Cho 2 Page)' },
                                     { value: '0 */3 * * *', label: '3 tiếng' },
+                                    { value: '0 */4 * * *', label: '4 tiếng (Tối ưu 1 Page - 5 bài/ngày)' },
                                     { value: '0 */6 * * *', label: '6 tiếng' },
                                     { value: '0 */12 * * *', label: '12 tiếng' },
                                     { value: '0 0 * * *', label: 'Mỗi ngày' }
@@ -589,7 +591,37 @@ export default function WordPressSites() {
                                   className="w-full py-2.5 px-4 rounded-full bg-fb-surface text-fb-text text-xs placeholder:text-fb-text-muted/60 focus:outline-none focus:ring-2 focus:ring-fb-blue"
                                   required
                                 />
-                                <p className="mt-1.5 text-[11px] text-fb-text-muted">Số lượng bài mới cào & tạo ảnh AI mỗi lần chạy (1 - 10 bài).</p>
+                                <p className="mt-1.5 text-[11px] text-fb-text-muted">Khuyên dùng 1 bài để tiết kiệm API AI và tránh quá tải.</p>
+                              </div>
+                            </div>
+
+                            {/** Gợi ý trực tiếp cấu hình theo số lượng Fanpage */}
+                            <div className="bg-fb-blue/10 border border-fb-blue/20 rounded-2xl p-3.5 space-y-2">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400">
+                                <span className="material-symbols-outlined text-[16px]">tips_and_updates</span>
+                                <span>Gợi ý chuẩn: Mục tiêu 5 bài / ngày / Fanpage (Tiết kiệm tối đa API AI)</span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                                <div className="bg-black/30 p-2 rounded-xl border border-white/5">
+                                  <span className="text-white/60 block text-[10px]">1 Fanpage:</span>
+                                  <strong className="text-fb-text block mt-0.5">Mỗi 4 tiếng</strong>
+                                  <span className="text-[10px] text-emerald-400 font-medium">Batch: 1 bài</span>
+                                </div>
+                                <div className="bg-black/30 p-2 rounded-xl border border-white/5">
+                                  <span className="text-white/60 block text-[10px]">2 Fanpage:</span>
+                                  <strong className="text-fb-text block mt-0.5">Mỗi 2 tiếng</strong>
+                                  <span className="text-[10px] text-emerald-400 font-medium">Batch: 1 bài</span>
+                                </div>
+                                <div className="bg-black/30 p-2 rounded-xl border border-white/5">
+                                  <span className="text-white/60 block text-[10px]">3 Fanpage:</span>
+                                  <strong className="text-fb-text block mt-0.5">Mỗi 1.5 tiếng</strong>
+                                  <span className="text-[10px] text-emerald-400 font-medium">Batch: 1 bài</span>
+                                </div>
+                                <div className="bg-black/30 p-2 rounded-xl border border-white/5">
+                                  <span className="text-white/60 block text-[10px]">4 - 5 Fanpage:</span>
+                                  <strong className="text-fb-text block mt-0.5">Mỗi 1 tiếng</strong>
+                                  <span className="text-[10px] text-emerald-400 font-medium">Batch: 1 bài</span>
+                                </div>
                               </div>
                             </div>
 

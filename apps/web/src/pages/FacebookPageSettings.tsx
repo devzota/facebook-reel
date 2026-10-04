@@ -292,6 +292,12 @@ export default function FacebookPageSettings() {
     { label: 'Khung 6 (07h, 15h, 23h)', times: ['07:00', '15:00', '23:00'] },
   ];
 
+  const predefined5PostsSchedules = [
+    { label: 'Gói Vàng 5 Bài (07h30, 11h30, 15h30, 19h30, 22h30)', times: ['07:30', '11:30', '15:30', '19:30', '22:30'] },
+    { label: 'Gói Trải Đều (08h, 12h, 16h, 20h, 23h30)', times: ['08:00', '12:00', '16:00', '20:00', '23:30'] },
+    { label: 'Gói Cao Điểm (07h, 11h, 15h, 19h, 23h)', times: ['07:00', '11:00', '15:00', '19:00', '23:00'] },
+  ];
+
   /** Publish Item Immediately */
   const ztteam_publishNow = async (item: any, type: 'image' | 'video') => {
     const confirmed = await ztteam_showConfirm('Xác nhận đăng bài', `Đăng ngay nội dung "${item.wp_post_title || 'bài viết'}" lên Fanpage?`);
@@ -765,9 +771,41 @@ export default function FacebookPageSettings() {
 
               {scheduleMode === 'fixed' ? (
                 <div className="space-y-4">
-                  {/** Quick Predefined Schedules */}
+                  {/** Quick Predefined Schedules: 5 bài/ngày (Khuyên dùng) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+                        <span>Khuyên dùng: Gói 5 bài / ngày (Tối ưu tương tác & Tiết kiệm API AI)</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Cách nhau ~4h</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {predefined5PostsSchedules.map((ps, idx) => (
+                        <button
+                          key={`5p-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            const hasConflict = ps.times.some(t => usedTimes.has(t));
+                            if (hasConflict) {
+                              ztteam_showToast('Có khung giờ trong gói này trùng với Fanpage khác!', 'error');
+                            }
+                            setScheduleFixedTimes(ps.times);
+                            ztteam_showToast(`Đã áp dụng ${ps.label}`, 'success');
+                          }}
+                          className="px-3 py-2.5 bg-gradient-to-r from-fb-blue/15 to-cyan-500/15 hover:from-fb-blue/25 hover:to-cyan-500/25 text-fb-text rounded-xl border border-cyan-500/30 text-[11px] font-bold transition-all text-left shadow-sm cursor-pointer"
+                        >
+                          <span className="block text-[10px] text-cyan-300 font-bold">{ps.label}</span>
+                          <span className="text-white font-black block mt-0.5">{ps.times.join(' - ')}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/** Quick Predefined Schedules: 3 bài/ngày */}
                   <div>
-                    <label className="block text-[10px] font-bold text-fb-text-muted uppercase mb-2">Chọn nhanh khung giờ chuẩn (3 bài / ngày):</label>
+                    <label className="block text-[10px] font-bold text-fb-text-muted uppercase mb-2">Hoặc chọn gói 3 bài / ngày:</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {predefinedSchedules.map((ps, idx) => (
                         <button
