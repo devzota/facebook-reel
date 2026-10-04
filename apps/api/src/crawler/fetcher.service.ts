@@ -212,6 +212,83 @@ export class ZTTeamFetcherService {
     return slice.trim() + '...';
   }
 
+  /**
+   * Extract Part 1 (Hook for Caption) and Part 2 (Continuation for First Comment)
+   * Tách câu chuyện thành 2 phần: Part 1 cho caption bài đăng và Part 2 cho bình luận lồng nhau.
+   */
+  ztteam_extractStoryParts(
+    content: string,
+    maxPart1Chars: number = 900,
+    maxPart2Chars: number = 700
+  ): { part1: string; part2: string } {
+    if (!content) return { part1: '', part2: '' };
+
+    let cleaned = content.replace(/^Part\s*1\s*[:\-]\s*/i, '').trim();
+
+    /** 1. Trường hợp bài viết có đánh dấu Part 1 và Part 2 rõ ràng */
+    const part2Regex = /Part\s*2\s*[:\-]/i;
+    const part2Match = cleaned.match(part2Regex);
+
+    if (part2Match && part2Match.index && part2Match.index > 100) {
+      let part1 = cleaned.substring(0, part2Match.index).trim();
+      let remainder = cleaned.substring(part2Match.index).trim();
+
+      /** Loại bỏ tiêu đề Part 2: ở đầu đoạn */
+      remainder = remainder.replace(/^Part\s*2\s*[:\-]\s*/i, '').trim();
+
+      /** Kiểm tra nếu có Part 3 để không lấy tràn sang Part 3 */
+      const part3Match = remainder.match(/Part\s*3\s*[:\-]/i);
+      let part2Raw = part3Match && part3Match.index ? remainder.substring(0, part3Match.index).trim() : remainder;
+
+      /** Giới hạn Part 2 vừa đủ dài theo quy chuẩn Facebook, kết thúc trọn vẹn tại dấu câu */
+      let part2 = part2Raw;
+      if (part2.length > maxPart2Chars) {
+        const slice = part2.substring(0, maxPart2Chars);
+        const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+        if (lastPeriod > 150) {
+          part2 = slice.substring(0, lastPeriod + 1).trim();
+        } else {
+          part2 = slice.trim() + '...';
+        }
+      }
+
+      return { part1, part2 };
+    }
+
+    /** 2. Trường hợp câu chuyện liền mạch không có chữ Part 1, Part 2 */
+    let part1 = cleaned;
+    let remainder = '';
+
+    if (cleaned.length > maxPart1Chars) {
+      const slice = cleaned.substring(0, maxPart1Chars);
+      const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+      if (lastPeriod > 200) {
+        part1 = slice.substring(0, lastPeriod + 1).trim();
+        remainder = cleaned.substring(lastPeriod + 1).trim();
+      } else {
+        part1 = slice.trim();
+        remainder = cleaned.substring(maxPart1Chars).trim();
+      }
+    }
+
+    let part2 = '';
+    if (remainder) {
+      if (remainder.length > maxPart2Chars) {
+        const slice = remainder.substring(0, maxPart2Chars);
+        const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+        if (lastPeriod > 150) {
+          part2 = slice.substring(0, lastPeriod + 1).trim();
+        } else {
+          part2 = slice.trim() + '...';
+        }
+      } else {
+        part2 = remainder;
+      }
+    }
+
+    return { part1, part2 };
+  }
+
   async ztteam_fetchUrlData(url: string): Promise<ZTTeamFetchResult> {
     try {
       /** Basic validation */

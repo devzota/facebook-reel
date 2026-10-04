@@ -239,6 +239,9 @@ model ztteam_images {
   posted_at         DateTime?
   fb_post_id        String?
   post_retry_count  Int       @default(0)
+  comment_step      Int       @default(0) /** 0: cho 1h, 1: da dang comment moi (cho 15p), 2: da reply Part 2 */
+  hook_comment_id   String?
+  hook_comment_at   DateTime?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 

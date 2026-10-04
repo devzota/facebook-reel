@@ -316,14 +316,42 @@ export default function ZTTeamAIPostCard({
       </div>
 
       {/** 6. First Comment Box (Facebook Gray Block) */}
-      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-1">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold text-fb-text">
-          <span className="material-symbols-outlined text-[14px] text-blue-400">comment</span>
-          <span>Bình luận cấp 1 (Link bài viết)</span>
+      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-2">
+        <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px] text-blue-400">comment</span>
+            <span>Bình luận Part 2 & Link</span>
+          </div>
+
+          {/** Badge trạng thái bình luận theo comment_step */}
+          {isAlreadyPosted ? (
+            item.comment_step === 2 ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">done_all</span>
+                Đã trả lời Part 2
+              </span>
+            ) : item.comment_step === 1 ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                Đã thả mồi YES (Chờ 15p)
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
+                Chờ 1h để thả mồi YES
+              </span>
+            )
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">schedule</span>
+              Chờ đăng bài
+            </span>
+          )}
         </div>
-        <p className="text-[11px] text-fb-text-muted truncate select-all">
+
+        <p className="text-[11px] text-fb-text-muted line-clamp-4 whitespace-pre-line select-all leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 font-mono">
           {item.ai_first_comment ||
-            `👉 Read the full story here: ${item.wp_post_url || 'https://thieponline.store'}`}
+            `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || 'https://thieponline.store'}`}
         </p>
       </div>
 

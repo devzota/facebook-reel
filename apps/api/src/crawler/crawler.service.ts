@@ -118,9 +118,9 @@ export class ZTTeamCrawlerService {
 
     this.logger.log(`Posted to WordPress: ID=${wpResult.id}, URL=${wpResult.url}`);
 
-    /** 4. Prepare Fanpage Resource: TITLE VIẾT HOA + Part 1 kịch tính */
+    /** 4. Prepare Fanpage Resource: TITLE VIẾT HOA + Part 1 Hook + Part 2 cho comment */
     const titleUppercase = storyTitle.toUpperCase();
-    const part1Hook = this.fetcherService.ztteam_extractPart1Hook(cleanContent, 900);
+    const { part1, part2 } = this.fetcherService.ztteam_extractStoryParts(cleanContent, 900, 700);
 
     /** 5. Determine Target Fanpage (Exclusive 1 Post per Fanpage across same Source & Category) */
     const targetPages: any[] = [];
@@ -204,16 +204,15 @@ export class ZTTeamCrawlerService {
     let createdImageId: string | undefined = undefined;
 
     for (const targetPage of targetPages) {
-      /** Prepare Caption & First Comment based on this specific Fanpage settings */
-      let fanpageCaption = `${titleUppercase}\n\n${part1Hook}`;
+      /** Prepare Caption & First Comment based on Facebook Viral standard */
+      const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+      let fanpageCaption = `${titleUppercase}\n\n${part1}\n\n${captionCTA}`;
       if (targetPage.add_link_to_caption) {
         fanpageCaption += `\n\n👉 Read full story here: ${wpResult.url}`;
       }
 
-      let firstCommentText: string | null = null;
-      if (targetPage.add_link_to_comment || (addLinkToComment && targetPage.add_link_to_comment !== false)) {
-        firstCommentText = `👉 Read the full story here: ${wpResult.url}`;
-      }
+      const commentCTA = `👉 FULL STORY HERE 👇👇👇\n${wpResult.url}`;
+      let firstCommentText: string | null = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
 
       let imgRecord = await this.prisma.ztteam_images.findFirst({
         where: {
@@ -232,6 +231,7 @@ export class ZTTeamCrawlerService {
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
             ai_first_comment: firstCommentText,
+            comment_step: 0,
             status: 'COMPLETED',
             created_at: new Date(), /** Update timestamp to reflect exact recent crawl/render time */
             updated_at: new Date(),
@@ -248,6 +248,7 @@ export class ZTTeamCrawlerService {
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
             ai_first_comment: firstCommentText,
+            comment_step: 0,
             status: 'COMPLETED', /** Ready for publisher.cron to post to Facebook! */
           },
         });
@@ -324,8 +325,8 @@ export class ZTTeamCrawlerService {
     }
 
     const primaryPage = targetPages[0];
-    const primaryCaption = `${titleUppercase}\n\n${part1Hook}` + (primaryPage?.add_link_to_caption ? `\n\n👉 Read full story here: ${wpResult.url}` : '');
-    const primaryComment = primaryPage?.add_link_to_comment ? `👉 Read the full story here: ${wpResult.url}` : undefined;
+    const primaryCaption = `${titleUppercase}\n\n${part1}\n\n...FULL STORY IN THE COMMENT 👇👇👇` + (primaryPage?.add_link_to_caption ? `\n\n👉 Read full story here: ${wpResult.url}` : '');
+    const primaryComment = part2 ? `${part2}\n\n👉 FULL STORY HERE 👇👇👇\n${wpResult.url}` : `👉 FULL STORY HERE 👇👇👇\n${wpResult.url}`;
 
     return {
       success: true,

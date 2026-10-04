@@ -33,6 +33,9 @@ export class ZTTeamPublisherCron {
     this.isRunning = true;
 
     try {
+      /** 0. Xử lý quy trình comment tự động sau 1 giờ và reply Part 2 sau 15 phút cho các bài đã đăng */
+      await this.ztteam_handleDelayedComments();
+
       /** 1. Tìm các Reel đã render xong đang chờ đăng (xếp theo thời gian tạo cũ nhất trước) */
       const pendingReels = await this.prisma.ztteam_reels.findMany({
         where: {
@@ -397,43 +400,18 @@ export class ZTTeamPublisherCron {
         caption
       );
 
-      const shouldPostComment = image.ai_first_comment === 'NO_LINK'
-        ? false
-        : Boolean(image.ai_first_comment || page.add_link_to_comment);
-
-      if (shouldPostComment && image.wp_post_url && fbPostId) {
-        try {
-          let commentText = '';
-          if (image.ai_first_comment && image.ai_first_comment !== 'NO_LINK') {
-            commentText = image.ai_first_comment;
-          } else {
-            const commentPrefixes = [
-              '👉 Discover more here:',
-              '🔥 Read the full story:',
-              '📌 Check out the details:',
-              '👇 Full article link:',
-              '🔗 Learn more at:'
-            ];
-            const commentPrefix = commentPrefixes[Math.floor(Math.random() * commentPrefixes.length)];
-            commentText = `${commentPrefix} ${trackingLink}`;
-          }
-          await this.facebookService.ztteam_publishComment(page.fb_page_id, fbPostId, commentText);
-        } catch (e: any) {
-          this.logger.error(`Failed to post comment for image ${image.id}: ${e.message}`);
-        }
-      }
-
       await this.prisma.ztteam_images.update({
         where: { id: image.id },
         data: {
           is_posted: true,
           posted_at: new Date(),
           fb_post_id: fbPostId,
-          status: 'POSTED'
+          status: 'POSTED',
+          comment_step: 0,
         }
       });
 
-      this.logger.log(`Successfully published image ${image.id} to page ${page.name}, Post ID: ${fbPostId}`);
+      this.logger.log(`Successfully published image ${image.id} to page ${page.name}, Post ID: ${fbPostId} (Comment Step 0 scheduled)`);
       this.eventEmitter.emit('image.posted', { imageId: image.id, pageId: page.id });
     } catch (error: any) {
       const currentRetries = (image.post_retry_count || 0) + 1;
@@ -472,6 +450,125 @@ export class ZTTeamPublisherCron {
           `❌ *Chi tiết lỗi:* ${error.message}`
         );
       }
+    }
+  }
+
+  /**
+   * Helper slugify chuỗi văn bản cho tracking link
+   */
+  private ztteam_slugify(text: string): string {
+    if (!text) return '';
+    return text.toString().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-').replace(/[^\w\-]+/g, '').replace(/\-\-+/g, '-').trim();
+  }
+
+  /**
+   * Xử lý quy trình comment tự động 2 bước sau khi đăng bài:
+   * Bước 1: Sau 60 phút từ posted_at -> Đăng bình luận mồi:
+   * "...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇"
+   * Bước 2: Sau 15 phút từ hook_comment_at -> Reply trực tiếp vào hook_comment_id với Part 2 + link bài viết
+   */
+  async ztteam_handleDelayedComments() {
+    try {
+      const now = new Date();
+
+      /** Bước 1: Quét các bài viết đăng sau 60 phút nhưng chưa đăng comment mồi (comment_step = 0) */
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      const step0Images = await this.prisma.ztteam_images.findMany({
+        where: {
+          is_posted: true,
+          fb_post_id: { not: null },
+          comment_step: 0,
+          posted_at: { lte: oneHourAgo }
+        },
+        include: {
+          page: {
+            include: { fb_account: true }
+          }
+        },
+        take: 10
+      });
+
+      for (const img of step0Images) {
+        if (!img.page?.fb_page_id || !img.fb_post_id) continue;
+
+        try {
+          const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
+          const hookCommentId = await this.facebookService.ztteam_publishComment(
+            img.page.fb_page_id,
+            img.fb_post_id,
+            hookText
+          );
+
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: {
+              comment_step: 1,
+              hook_comment_id: hookCommentId || null,
+              hook_comment_at: new Date()
+            }
+          });
+
+          this.logger.log(`[Auto-Comment Step 1] Posted YES hook comment for image ${img.id} (Post ${img.fb_post_id}, Comment ID: ${hookCommentId})`);
+        } catch (err: any) {
+          this.logger.error(`[Auto-Comment Step 1] Failed for image ${img.id}: ${err.message}`);
+        }
+      }
+
+      /** Bước 2: Quét các bài viết đã đăng comment mồi được 15 phút (comment_step = 1) */
+      const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+      const step1Images = await this.prisma.ztteam_images.findMany({
+        where: {
+          is_posted: true,
+          comment_step: 1,
+          hook_comment_id: { not: null },
+          hook_comment_at: { lte: fifteenMinutesAgo }
+        },
+        include: {
+          page: {
+            include: { fb_account: true }
+          }
+        },
+        take: 10
+      });
+
+      for (const img of step1Images) {
+        if (!img.page?.fb_page_id || !img.hook_comment_id) continue;
+
+        try {
+          /** Nội dung reply Part 2 + link bài viết */
+          let replyContent = img.ai_first_comment;
+          if (!replyContent || replyContent === 'NO_LINK') {
+            const utmMedium = this.ztteam_slugify(img.page?.fb_account?.name || 'account');
+            const utmCampaign = this.ztteam_slugify(img.page?.name || 'page');
+            const trackingLink = img.wp_post_url
+              ? `${img.wp_post_url}${img.wp_post_url.includes('?') ? '&' : '?'}utm_source=image&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`
+              : '';
+            replyContent = `👉 FULL STORY HERE 👇👇👇\n${trackingLink}`;
+          }
+
+          /** Đăng reply trực tiếp vào bình luận mồi (nested comment) */
+          await this.facebookService.ztteam_publishComment(
+            img.page.fb_page_id,
+            img.hook_comment_id,
+            replyContent
+          );
+
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: {
+              comment_step: 2
+            }
+          });
+
+          this.logger.log(`[Auto-Comment Step 2] Successfully replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id}`);
+        } catch (err: any) {
+          this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id}: ${err.message}`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`Error in ztteam_handleDelayedComments: ${error.message}`);
     }
   }
 }

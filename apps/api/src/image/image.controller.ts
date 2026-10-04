@@ -300,30 +300,16 @@ export class ZTTeamImageController {
       description
     );
 
-    if (fbPostId && image.page.add_link_to_comment && trackingLinkManual) {
-      const commentPrefixes = [
-        '👉 Discover more here:',
-        '🔥 Read the full story:',
-        '📌 Check out the details:',
-        '👇 Full article link:',
-        '🔗 Learn more at:'
-      ];
-      const commentPrefix = commentPrefixes[Math.floor(Math.random() * commentPrefixes.length)];
-      
-      /** We still include ai_first_comment if it exists, unlike reel which ignored it entirely. But wait! User says "nó phải là random như video reel ấy" so I'll just append it to ai_first_comment. */
-      /** Wait, reel ignores it if add_link_to_comment is true! "nó phải là random như video reel ấy" means I must include the prefix! */
-      const commentText = image.ai_first_comment 
-        ? `${image.ai_first_comment}\n\n${commentPrefix} ${trackingLinkManual}`
-        : `${commentPrefix} ${trackingLinkManual}`;
-      
-      await this.facebookService.ztteam_publishComment(image.page.fb_page_id, fbPostId, commentText).catch((e: any) => {
-        console.error('Failed to post comment for image:', e.message);
-      });
-    }
-
+    /** Quy trinh comment tu dong se duoc publisher.cron xu ly: sau 1 gio dang comment moi va sau 15 phut reply Part 2 + link */
     const updatedImage = await this.prisma.ztteam_images.update({
       where: { id },
-      data: { is_posted: true, posted_at: new Date(), fb_post_id: fbPostId, status: 'POSTED' }
+      data: {
+        is_posted: true,
+        posted_at: new Date(),
+        fb_post_id: fbPostId,
+        status: 'POSTED',
+        comment_step: 0,
+      }
     });
 
     this.eventEmitter.emit('image.updated', updatedImage);
