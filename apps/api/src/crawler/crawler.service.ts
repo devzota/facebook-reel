@@ -129,27 +129,42 @@ export class ZTTeamCrawlerService {
       if (p) targetPages.push(p);
     } else {
       /** Find candidate active pages sharing this target site & category */
-      const categoryConditions: any[] = [
-        { target_category_id: null },
-        { target_category_id: '' },
-      ];
+      let candidatePages: any[] = [];
+
       if (sourceCategory) {
-        categoryConditions.push({ target_category_id: String(sourceCategory) });
-      }
-
-      const linkedSources = await this.prisma.ztteam_page_sources.findMany({
-        where: {
-          target_site_id: targetSiteId,
-          is_active: true,
-          OR: categoryConditions,
-        },
-        include: { page: true },
-      });
-
-      const candidatePages: any[] = [];
-      for (const ls of linkedSources) {
-        if (ls.page && ls.page.is_active && !candidatePages.some(tp => tp.id === ls.page.id)) {
-          candidatePages.push(ls.page);
+        /** Specific Category Source: Match pages configured for this category OR pages accepting all categories */
+        const linkedSources = await this.prisma.ztteam_page_sources.findMany({
+          where: {
+            target_site_id: targetSiteId,
+            is_active: true,
+            OR: [
+              { target_category_id: null },
+              { target_category_id: '' },
+              { target_category_id: String(sourceCategory) }
+            ],
+          },
+          include: { page: true },
+        });
+        for (const ls of linkedSources) {
+          if (ls.page && ls.page.is_active && !candidatePages.some(tp => tp.id === ls.page.id)) {
+            candidatePages.push(ls.page);
+          }
+        }
+      } else {
+        /** General Source (sourceCategory is empty/undefined):
+         * All active pages linked to this target site can receive articles!
+         */
+        const linkedSources = await this.prisma.ztteam_page_sources.findMany({
+          where: {
+            target_site_id: targetSiteId,
+            is_active: true,
+          },
+          include: { page: true },
+        });
+        for (const ls of linkedSources) {
+          if (ls.page && ls.page.is_active && !candidatePages.some(tp => tp.id === ls.page.id)) {
+            candidatePages.push(ls.page);
+          }
         }
       }
 
@@ -170,26 +185,28 @@ export class ZTTeamCrawlerService {
       const eligiblePages = candidatePages.filter(p => !usedPageIds.has(p.id));
 
       if (eligiblePages.length > 0) {
-        /** Fair round-robin / least loaded: pick the page with fewest unposted items in queue */
+        /** Strict Round-Robin: Pick the page that received a post least recently (oldest or null created_at) */
         let chosenPage = eligiblePages[0];
         if (eligiblePages.length > 1) {
-          const loadCounts = await Promise.all(
+          const pageLastAssigned = await Promise.all(
             eligiblePages.map(async (p) => {
-              const count = await this.prisma.ztteam_images.count({
-                where: {
-                  page_id: p.id,
-                  status: { in: ['QUEUED', 'RENDERING', 'COMPLETED'] },
-                  is_posted: false
-                }
+              const lastImage = await this.prisma.ztteam_images.findFirst({
+                where: { page_id: p.id },
+                orderBy: { created_at: 'desc' },
+                select: { created_at: true }
               });
-              return { page: p, count };
+              return {
+                page: p,
+                lastTime: lastImage?.created_at ? new Date(lastImage.created_at).getTime() : 0,
+              };
             })
           );
-          loadCounts.sort((a, b) => a.count - b.count);
-          chosenPage = loadCounts[0].page;
+          /** Sắp xếp tăng dần theo lastTime: Page nào có lastTime nhỏ nhất (lâu nhất chưa nhận bài) sẽ đứng đầu */
+          pageLastAssigned.sort((a, b) => a.lastTime - b.lastTime);
+          chosenPage = pageLastAssigned[0].page;
         }
         targetPages.push(chosenPage);
-        this.logger.log(`Assigned story #${wpResult.id} exclusively to Page: ${chosenPage.name} (${chosenPage.id})`);
+        this.logger.log(`[Round-Robin] Assigned story #${wpResult.id} exclusively to Page: ${chosenPage.name} (${chosenPage.id})`);
       } else if (candidatePages.length === 0) {
         /** Fallback only if no candidate pages configured at all */
         const fallbackPage = await this.prisma.ztteam_pages.findFirst({
