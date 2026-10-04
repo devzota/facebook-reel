@@ -315,44 +315,79 @@ export default function ZTTeamAIPostCard({
         </div>
       </div>
 
-      {/** 6. First Comment Box (Facebook Gray Block) */}
-      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-2">
-        <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
-          <div className="flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[14px] text-blue-400">comment</span>
-            <span>Bình luận Part 2 & Link</span>
+      {/** 6. Two-Step Delayed Comment Preview (Mô phỏng 2 tầng bình luận Facebook) */}
+      <div className="mx-4 mb-3 p-3 bg-fb-surface-hover/80 rounded-xl border border-white/5 space-y-3">
+        {/** Tầng 1: Bình luận mồi YES (T = 60 phút) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
+            <div className="flex items-center gap-1.5 text-blue-400">
+              <span className="material-symbols-outlined text-[14px]">bolt</span>
+              <span>Bình luận 1: Mồi kích hoạt (Sau 1h)</span>
+            </div>
+
+            {isAlreadyPosted ? (
+              item.comment_step >= 1 ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">check</span>
+                  Đã thả mồi
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
+                  Chờ đủ 1h
+                </span>
+              )
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">schedule</span>
+                Tự động sau 1h
+              </span>
+            )}
           </div>
 
-          {/** Badge trạng thái bình luận theo comment_step */}
-          {isAlreadyPosted ? (
-            item.comment_step === 2 ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">done_all</span>
-                Đã trả lời Part 2
-              </span>
-            ) : item.comment_step === 1 ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                Đã thả mồi YES (Chờ 15p)
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
-                Chờ 1h để thả mồi YES
-              </span>
-            )
-          ) : (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[12px]">schedule</span>
-              Chờ đăng bài
-            </span>
-          )}
+          <p className="text-[11px] text-blue-200/90 bg-blue-950/40 p-2 rounded-lg border border-blue-500/20 select-all leading-relaxed italic">
+            ...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇
+          </p>
         </div>
 
-        <p className="text-[11px] text-fb-text-muted line-clamp-4 whitespace-pre-line select-all leading-relaxed bg-black/20 p-2 rounded-lg border border-white/5 font-mono">
-          {item.ai_first_comment ||
-            `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || 'https://thieponline.store'}`}
-        </p>
+        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (T = 75 phút) */}
+        <div className="ml-3 pl-2.5 border-l-2 border-blue-500/30 space-y-1.5">
+          <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
+            <div className="flex items-center gap-1 text-cyan-400">
+              <span className="material-symbols-outlined text-[14px]">reply</span>
+              <span>Bình luận 2: Trả lời Part 2 & Link (Sau 15p)</span>
+            </div>
+
+            {isAlreadyPosted ? (
+              item.comment_step === 2 ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">done_all</span>
+                  Đã trả lời
+                </span>
+              ) : item.comment_step === 1 ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                  Chờ 15p
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">hourglass_empty</span>
+                  Chờ bước 1
+                </span>
+              )
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">schedule</span>
+                Tự động sau 75p
+              </span>
+            )}
+          </div>
+
+          <p className="text-[11px] text-fb-text-muted line-clamp-4 whitespace-pre-line select-all leading-relaxed bg-black/30 p-2 rounded-lg border border-white/5 font-mono">
+            {item.ai_first_comment ||
+              `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || 'https://thieponline.store'}`}
+          </p>
+        </div>
       </div>
 
       {/** 7. Actions Footer Bar */}

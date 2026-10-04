@@ -162,14 +162,24 @@ export class ZTTeamFetcherService {
       .replace(/^Title:.*?\n/m, '')
       .replace(/^URL Source:.*?\n/m, '')
       .replace(/^Markdown Content:\n/m, '')
+      .replace(/div\[data-widget-id.*?\}\s*/gs, '')
+      .replace(/\(function\(w,q\)[\s\S]*?\(window,["']_mgq["']\);?/g, '')
+      .replace(/\{[^{}]*min-height:[^{}]*\}/g, '')
       .replace(/(?:00:00\s*)+/g, '')
       .replace(/(?:\b0?\d:\d{2}\s*)+/g, '') /** Strip loose timestamps like 0:00 */
       .replace(/!\[.*?\]\([^\s\)]+\)/g, '') /** Remove markdown images */
+      /** Remove author box, breadcrumbs, reading time, and date patterns */
+      .replace(/^(?:Stories|Home|thieponline)\s*$/gim, '')
+      .replace(/^(?:Senior Correspondent|Staff Writer|Editor|Author|Contributor)\s*$/gim, '')
+      .replace(/^\d+\s+min read\s*$/gim, '')
+      .replace(/^\d+\s+(?:January|February|March|April|May|June|July|August|September|October|November|December),?\s+\d{4}\s*$/gim, '')
       /** Remove ad blocks, sponsored phrases, and cookie notices */
       .replace(/\[?(?:Advertisement|Sponsored Content|Promoted Stories|Related Stories|Share on Facebook|Share on Twitter|Pin it|Leave a Reply|Leave a comment|Cookie Policy|Accept Cookies)\]?/gi, '')
+      /** Remove standalone social button words */
+      .replace(/^(?:Facebook|Twitter|LinkedIn|Like|Comment|Share|Follow)\s*$/gim, '')
       /** Remove audio player strings */
       .replace(/(?:Audio Player|Listen to this story|Play audio|Pause audio)/gi, '')
-      /** Remove viral engagement spam callouts (e.g. 'Type YES and I will post the rest') */
+      /** Remove viral engagement spam callouts */
       .replace(/(?:The story is still unfolding[^\n]*|Type\s*["“']?YES["”']?[^\n]*|Comment\s*["“']?YES["”']?[^\n]*|Drop a\s*["“']?YES["”']?[^\n]*|Follow for part\s*\d+[^\n]*|Like and follow for part\s*\d+[^\n]*)/gi, '')
       /** Remove disclaimer at the very end if present */
       .replace(/Disclaimer:\s*This story is fictional[\s\S]*$/i, '')
@@ -314,10 +324,18 @@ export class ZTTeamFetcherService {
 
       const image = this.ztteam_extractOgImage($);
       const siteName = this.ztteam_extractSiteName($);
-      const { title, content, contentHtml, excerpt } = this.ztteam_parseReadability(
+      let { title, content, contentHtml, excerpt } = this.ztteam_parseReadability(
         html,
         url,
       );
+
+      const customContentEl = $('.article-content').length ? $('.article-content') : ($('.entry-content').length ? $('.entry-content') : null);
+      if (customContentEl) {
+        const clone = customContentEl.clone();
+        clone.find('script, style, noscript, iframe, svg, nav, header, footer, .sharedaddy, .ads, [data-widget-id], .comment-respond, .post-meta, .entry-meta, .author-box, .breadcrumbs, .social-share').remove();
+        content = clone.text().replace(/\t/g, ' ').replace(/[ ]{2,}/g, ' ').replace(/\. ([A-Z])/g, '.\n\n$1').trim();
+      }
+      content = this.ztteam_cleanStoryContent(content);
 
       let images: string[] = [];
       const content$ = cheerio.load(contentHtml);
