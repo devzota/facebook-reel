@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useWordpressStore } from '../stores/wordpressStore';
@@ -64,21 +64,18 @@ export default function FacebookPageSettings() {
   const [nextPublishTime, setNextPublishTime] = useState<string | null>(null);
 
   /** Queue & History State */
-  const [queueTab, setQueueTab] = useState<'image' | 'video'>('image');
   const [imagesQueue, setImagesQueue] = useState<any[]>([]);
-  const [reels, setReels] = useState<any[]>([]);
   const [isLoadingQueue, setIsLoadingQueue] = useState(false);
   const [isPosting, setIsPosting] = useState<Record<string, boolean>>({});
 
-  /** Manual Create Modal State */
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [manualCreateFormat, setManualCreateFormat] = useState<'image' | 'video'>('image');
-  const [createSiteId, setCreateSiteId] = useState('');
-  const [createPosts, setCreatePosts] = useState<any[]>([]);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
-  const [createPostId, setCreatePostId] = useState('');
-  const [createPostTitle, setCreatePostTitle] = useState('');
-  const [isCreatingQueueItem, setIsCreatingQueueItem] = useState(false);
+  /** Filter items for Queue and History tabs */
+  const queueItems = useMemo(() => {
+    return imagesQueue.filter(item => !item.is_posted && item.status !== 'POSTED');
+  }, [imagesQueue]);
+
+  const historyItems = useMemo(() => {
+    return imagesQueue.filter(item => item.is_posted || item.status === 'POSTED');
+  }, [imagesQueue]);
 
   /** Initial Fetch */
   useEffect(() => {
@@ -223,14 +220,10 @@ export default function FacebookPageSettings() {
   const ztteam_loadQueue = async (isSilent = false) => {
     try {
       if (!isSilent) setIsLoadingQueue(true);
-      const [imgRes, reelRes] = await Promise.all([
-        api.get(`image/list?fbPageId=${id}&limit=30&_t=${Date.now()}`),
-        api.get(`render/list?fbPageId=${id}&limit=30&_t=${Date.now()}`)
-      ]);
+      const imgRes = await api.get(`image/list?fbPageId=${id}&limit=50&_t=${Date.now()}`);
       setImagesQueue(imgRes.data?.data || []);
-      setReels(reelRes.data?.reels || []);
     } catch (error: any) {
-      if (!isSilent) ztteam_showToast('Lỗi tải danh sách hàng đợi', 'error');
+      if (!isSilent) ztteam_showToast('Lỗi tải danh sách bài viết', 'error');
     } finally {
       if (!isSilent) setIsLoadingQueue(false);
     }
@@ -299,17 +292,12 @@ export default function FacebookPageSettings() {
   ];
 
   /** Publish Item Immediately */
-  const ztteam_publishNow = async (item: any, type: 'image' | 'video') => {
+  const ztteam_publishNow = async (item: any) => {
     const confirmed = await ztteam_showConfirm('Xác nhận đăng bài', `Đăng ngay nội dung "${item.wp_post_title || 'bài viết'}" lên Fanpage?`);
     if (!confirmed) return;
     try {
       setIsPosting(prev => ({ ...prev, [item.id]: true }));
-      if (type === 'image') {
-        await api.post(`image/${item.id}/post-to-fb`);
-      } else {
-        const res = await api.post(`render/post/${item.id}`);
-        if (res.data?.error) throw new Error(res.data.error);
-      }
+      await api.post(`image/${item.id}/post-to-fb`);
       ztteam_showToast('Đã đăng bài lên Fanpage thành công!', 'success');
       ztteam_loadQueue(true);
     } catch (error: any) {
@@ -320,13 +308,9 @@ export default function FacebookPageSettings() {
   };
 
   /** Retry Item */
-  const ztteam_retryQueueItem = async (item: any, type: 'image' | 'video') => {
+  const ztteam_retryQueueItem = async (item: any) => {
     try {
-      if (type === 'image') {
-        await api.post(`image/retry/${item.id}`);
-      } else {
-        await api.post(`render/retry/${item.id}`);
-      }
+      await api.post(`image/retry/${item.id}`);
       ztteam_showToast('Đã thêm lại vào hàng đợi', 'success');
       ztteam_loadQueue();
     } catch (error: any) {
@@ -335,86 +319,17 @@ export default function FacebookPageSettings() {
   };
 
   /** Delete Item */
-  const ztteam_deleteQueueItem = async (item: any, type: 'image' | 'video') => {
+  const ztteam_deleteQueueItem = async (item: any) => {
     const confirmed = await ztteam_showConfirm('Xác nhận xóa', 'Xóa mục này khỏi hàng đợi? Hành động không thể hoàn tác.');
     if (!confirmed) return;
     try {
-      if (type === 'image') {
-        await api.delete(`image/${item.id}`);
-      } else {
-        await api.post(`render/delete/${item.id}`);
-      }
+      await api.delete(`image/${item.id}`);
       ztteam_showToast('Đã xóa thành công', 'success');
       ztteam_loadQueue();
     } catch (error: any) {
       ztteam_showToast(error.response?.data?.message || 'Lỗi xóa', 'error');
     }
   };
-
-  /** Manual Create Item */
-  const ztteam_handleManualCreate = async () => {
-    if (!createSiteId || !createPostId) {
-      ztteam_showToast('Vui lòng chọn nguồn và bài viết', 'error');
-      return;
-    }
-
-    try {
-      setIsCreatingQueueItem(true);
-      const selectedPost = createPosts.find(p => String(p.id) === String(createPostId));
-      const apiEndpoint = manualCreateFormat === 'image' ? 'image/create' : 'render/create';
-
-      const res = await api.post(apiEndpoint, {
-        pageId: id,
-        wpPostId: String(createPostId),
-        wpPostTitle: createPostTitle,
-        wpPostUrl: selectedPost ? selectedPost.link : undefined,
-        templateId: 'auto'
-      });
-
-      if (res.data && res.data.error) {
-        throw new Error(res.data.error);
-      }
-      ztteam_showToast(`Đã thêm lệnh tạo ${manualCreateFormat === 'image' ? 'Ảnh' : 'Reel'} vào hàng đợi`, 'success');
-      setShowCreateModal(false);
-      setCreatePostId('');
-      setCreatePostTitle('');
-      ztteam_loadQueue();
-    } catch (err: any) {
-      ztteam_showToast(err.response?.data?.error || err.response?.data?.message || err.message || 'Lỗi khởi tạo', 'error');
-    } finally {
-      setIsCreatingQueueItem(false);
-    }
-  };
-
-  /** Fetch Posts when Create Site changes */
-  useEffect(() => {
-    if (createSiteId) {
-      setIsLoadingPosts(true);
-      const sourceConfig = sources.find(s => s.target_site_id === createSiteId);
-      const params = new URLSearchParams();
-      if (sourceConfig?.target_category_id) params.append('categoryId', sourceConfig.target_category_id);
-      if (sourceConfig?.target_tags) params.append('targetTags', sourceConfig.target_tags);
-      const qs = params.toString();
-
-      api.get(`wordpress/sites/${createSiteId}/posts${qs ? '?' + qs : ''}`)
-        .then(res => {
-          setCreatePosts(res.data || []);
-          if (res.data && res.data.length > 0) {
-            setCreatePostId(res.data[0].id);
-            setCreatePostTitle(res.data[0].title);
-          }
-        })
-        .catch(err => {
-          ztteam_showToast(err.response?.data?.message || err.message || 'Lỗi tải danh sách bài viết', 'error');
-          setCreatePosts([]);
-        })
-        .finally(() => setIsLoadingPosts(false));
-    } else {
-      setCreatePosts([]);
-      setCreatePostId('');
-      setCreatePostTitle('');
-    }
-  }, [createSiteId]);
 
   /** Status Badge Helper */
   const ztteam_getStatusBadge = (status: string) => {
@@ -528,16 +443,35 @@ export default function FacebookPageSettings() {
 
         <button
           onClick={() => setActiveTab(2)}
-          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all ${
+          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all cursor-pointer ${
             activeTab === 2
+              ? 'border-amber-400 text-amber-400 bg-amber-400/5 shadow-xs'
+              : 'border-transparent text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/40'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">pending_actions</span>
+          2. Hàng Đợi Xuất Bản
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+            activeTab === 2 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-fb-surface-hover text-fb-text border-white/5'
+          }`}>
+            {queueItems.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab(3)}
+          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all cursor-pointer ${
+            activeTab === 3
               ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5 shadow-xs'
               : 'border-transparent text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/40'
           }`}
         >
-          <span className="material-symbols-outlined text-[20px]">queue</span>
-          2. Hàng Đợi & Lịch Sử
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-fb-surface-hover text-fb-text border border-white/5">
-            {imagesQueue.length + reels.length}
+          <span className="material-symbols-outlined text-[20px]">history</span>
+          3. Lịch Sử Đã Đăng
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+            activeTab === 3 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-fb-surface-hover text-fb-text border-white/5'
+          }`}>
+            {historyItems.length}
           </span>
         </button>
       </div>
@@ -919,105 +853,66 @@ export default function FacebookPageSettings() {
         </div>
       )}
 
-      {/** TAB 2: HÀNG ĐỢI & LỊCH SỬ ĐĂNG BÀI */}
+      {/** TAB 2: HÀNG ĐỢI XUẤT BẢN */}
       {activeTab === 2 && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="bg-fb-surface rounded-2xl shadow-lg border border-fb-surface-hover/50 overflow-hidden flex flex-col">
 
-            {/** Queue Subheader & Switcher */}
-            <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-fb-surface-hover/50 bg-fb-surface-hover/10">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setQueueTab('image')}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                    queueTab === 'image'
-                      ? 'bg-fb-blue text-white shadow-md shadow-blue-500/20'
-                      : 'bg-fb-surface-hover text-fb-text-muted hover:text-fb-text'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-                  Hàng Đợi Ảnh 2K ({imagesQueue.length})
-                </button>
-                <button
-                  onClick={() => setQueueTab('video')}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                    queueTab === 'video'
-                      ? 'bg-fb-blue text-white shadow-md shadow-blue-500/20'
-                      : 'bg-fb-surface-hover text-fb-text-muted hover:text-fb-text'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">movie</span>
-                  Hàng Đợi Video Reel ({reels.length})
-                </button>
+            {/** Header */}
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-fb-surface-hover/50 bg-fb-surface-hover/10">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-amber-400 text-[26px]">pending_actions</span>
+                <div>
+                  <h3 className="text-base font-black text-fb-text">Hàng Đợi Xuất Bản Bài Viết Ảnh 2K</h3>
+                  <p className="text-[11px] text-fb-text-muted mt-0.5">
+                    Các bài viết đã tạo ảnh AI 2K thành công và đang chờ đến khung giờ xuất bản tự động ({queueItems.length} bài)
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 self-end sm:self-auto">
                 <button
                   onClick={() => ztteam_loadQueue()}
                   disabled={isLoadingQueue}
-                  className="px-4 py-2 bg-fb-surface-hover text-fb-text-muted hover:text-fb-text rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 border border-fb-surface-hover/50"
+                  className="px-4 py-2 bg-fb-surface-hover text-fb-text-muted hover:text-fb-text rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 border border-fb-surface-hover/50 cursor-pointer"
                 >
                   <span className={`material-symbols-outlined text-[16px] ${isLoadingQueue ? 'animate-spin' : ''}`}>refresh</span>
                   Làm mới
                 </button>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-5 py-2 bg-gradient-to-r from-fb-blue to-cyan-500 hover:opacity-90 text-white rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/20"
-                >
-                  <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                  Tạo thủ công
-                </button>
               </div>
             </div>
 
-            {/** Queue List Content */}
+            {/** Queue List */}
             <div className="p-6">
               {isLoadingQueue ? (
                 <div className="py-20 text-center text-fb-text-muted flex flex-col items-center justify-center">
                   <span className="material-symbols-outlined animate-spin text-4xl text-fb-blue mb-3">refresh</span>
                   <span className="text-sm font-bold">Đang tải danh sách bài viết trong hàng đợi...</span>
                 </div>
+              ) : queueItems.length === 0 ? (
+                <div className="py-16 text-center text-fb-text-muted flex flex-col items-center justify-center bg-fb-surface-hover/20 rounded-2xl border border-dashed border-fb-surface-hover/50">
+                  <span className="material-symbols-outlined text-5xl mb-3 text-fb-text-muted/40">schedule</span>
+                  <p className="text-base font-bold text-fb-text">Hàng đợi xuất bản hiện đang trống</p>
+                  <p className="text-xs text-fb-text-muted mt-1 max-w-md">
+                    Khi hệ thống tự động cào bài từ nguồn Website WordPress, các bài viết kèm ảnh AI 2K sẽ xuất hiện ở đây và tự động đăng lên Fanpage theo lịch đã thiết lập.
+                  </p>
+                </div>
               ) : (
-                (() => {
-                  const displayList = queueTab === 'image' ? imagesQueue : reels;
-                  if (!displayList || displayList.length === 0) {
-                    return (
-                      <div className="py-16 text-center text-fb-text-muted flex flex-col items-center justify-center bg-fb-surface-hover/20 rounded-2xl border border-dashed border-fb-surface-hover/50">
-                        <span className="material-symbols-outlined text-5xl mb-3 text-fb-text-muted/40">
-                          {queueTab === 'image' ? 'photo_library' : 'video_library'}
-                        </span>
-                        <p className="text-base font-bold text-fb-text">Chưa có bài viết nào trong hàng đợi {queueTab === 'image' ? 'Ảnh 2K' : 'Video Reel'}</p>
-                        <p className="text-xs text-fb-text-muted mt-1 max-w-md">
-                          Khi hệ thống cào bài từ Website WordPress hoặc khi bạn bấm "Tạo thủ công", các bài viết sẽ hiển thị ở đây với ảnh 2K tạo bởi AI.
-                        </p>
-                        <button
-                          onClick={() => setShowCreateModal(true)}
-                          className="mt-4 px-4 py-2 bg-fb-blue/15 text-fb-blue rounded-xl text-xs font-bold hover:bg-fb-blue/25 transition-colors"
-                        >
-                          Tạo ngay 1 bài test
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {displayList.map((item) => (
-                        <ZTTeamAIPostCard
-                          key={item.id}
-                          item={item}
-                          pageName={pageName}
-                          pageAvatar={pageAvatar}
-                          fbPageId={fbPageId}
-                          isPosting={isPosting[item.id] || false}
-                          onPostNow={(it) => ztteam_publishNow(it, queueTab)}
-                          onRetry={(it) => ztteam_retryQueueItem(it, queueTab)}
-                          onDelete={(it) => ztteam_deleteQueueItem(it, queueTab)}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {queueItems.map((item) => (
+                    <ZTTeamAIPostCard
+                      key={item.id}
+                      item={item}
+                      pageName={pageName}
+                      pageAvatar={pageAvatar}
+                      fbPageId={fbPageId}
+                      isPosting={isPosting[item.id] || false}
+                      onPostNow={(it) => ztteam_publishNow(it)}
+                      onRetry={(it) => ztteam_retryQueueItem(it)}
+                      onDelete={(it) => ztteam_deleteQueueItem(it)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
 
@@ -1025,120 +920,69 @@ export default function FacebookPageSettings() {
         </div>
       )}
 
-      {/** Modal Tạo Thủ Công */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-fb-surface border border-fb-surface-hover/50 w-full max-w-lg overflow-hidden flex flex-col shadow-2xl rounded-2xl animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-fb-surface-hover/80 flex justify-between items-center bg-fb-surface-hover/20">
-              <h3 className="text-base font-black text-fb-text tracking-tight flex items-center gap-2">
-                <span className="material-symbols-outlined text-fb-blue">add_circle</span>
-                Tạo Bài Mới Vào Hàng Đợi
-              </h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-fb-surface-hover text-fb-text-muted hover:text-rose-400 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
+      {/** TAB 3: LỊCH SỬ ĐÃ ĐĂNG BÀI */}
+      {activeTab === 3 && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="bg-fb-surface rounded-2xl shadow-lg border border-fb-surface-hover/50 overflow-hidden flex flex-col">
 
-            <div className="p-6 space-y-5">
-              {/** Format Switcher */}
-              <div className="flex bg-fb-surface-hover/40 p-1.5 rounded-xl border border-fb-surface-hover/50 gap-1">
+            {/** Header */}
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-fb-surface-hover/50 bg-fb-surface-hover/10">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-emerald-400 text-[26px]">history</span>
+                <div>
+                  <h3 className="text-base font-black text-fb-text">Lịch Sử Bài Viết Đã Đăng Fanpage</h3>
+                  <p className="text-[11px] text-fb-text-muted mt-0.5">
+                    Tổng số {historyItems.length} bài viết đã xuất bản thành công lên Facebook kèm tiến trình bình luận 2 bước
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 self-end sm:self-auto">
                 <button
-                  type="button"
-                  onClick={() => setManualCreateFormat('image')}
-                  className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                    manualCreateFormat === 'image'
-                      ? 'bg-fb-blue text-white shadow-md shadow-blue-500/20'
-                      : 'text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/30'
-                  }`}
+                  onClick={() => ztteam_loadQueue()}
+                  disabled={isLoadingQueue}
+                  className="px-4 py-2 bg-fb-surface-hover text-fb-text-muted hover:text-fb-text rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 border border-fb-surface-hover/50 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-                  Ảnh 2K (Facebook Post)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setManualCreateFormat('video')}
-                  className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                    manualCreateFormat === 'video'
-                      ? 'bg-fb-blue text-white shadow-md shadow-blue-500/20'
-                      : 'text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/30'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">movie</span>
-                  Video Reel
+                  <span className={`material-symbols-outlined text-[16px] ${isLoadingQueue ? 'animate-spin' : ''}`}>refresh</span>
+                  Làm mới
                 </button>
               </div>
-
-              {/** Website Source Selection */}
-              <div>
-                <label className="block font-bold text-fb-text-muted uppercase tracking-wider text-[10px] mb-1.5">
-                  Chọn Nguồn Website <span className="text-rose-400">*</span>
-                </label>
-                <CustomDropdown
-                  value={createSiteId}
-                  onChange={v => setCreateSiteId(v)}
-                  options={[
-                    { value: '', label: '-- Chọn Website WP --' },
-                    ...(Array.from(new Set(sources.map(s => s.target_site_id))).map(siteId => {
-                      const linkedSite = sites.find(s => s.id === siteId);
-                      return linkedSite ? { value: siteId, label: linkedSite.wp_url } : null;
-                    }).filter(Boolean) as any[])
-                  ]}
-                />
-              </div>
-
-              {/** Post Selection */}
-              <div>
-                <label className="block font-bold text-fb-text-muted uppercase tracking-wider text-[10px] mb-1.5 flex items-center gap-2">
-                  Chọn Bài Viết Từ Website <span className="text-rose-400">*</span>
-                  {isLoadingPosts && <span className="material-symbols-outlined text-[16px] animate-spin text-fb-blue">progress_activity</span>}
-                </label>
-                <CustomDropdown
-                  value={createPostId}
-                  onChange={v => {
-                    setCreatePostId(v);
-                    const post = createPosts.find(p => String(p.id) === String(v));
-                    if (post) setCreatePostTitle(post.title);
-                  }}
-                  disabled={!createSiteId || isLoadingPosts || createPosts.length === 0}
-                  options={[
-                    { value: '', label: '-- Chọn Bài Viết Gần Đây --' },
-                    ...createPosts.map(p => ({
-                      value: p.id,
-                      label: `${p.title} (${new Date(p.date).toLocaleDateString('vi-VN')})`
-                    }))
-                  ]}
-                />
-                {createPosts.length === 0 && createSiteId && !isLoadingPosts && (
-                  <p className="text-xs text-rose-400 mt-1">Không tìm thấy bài viết nào trên trang web này.</p>
-                )}
-              </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-fb-surface-hover/50 bg-fb-surface-hover/20 flex justify-end gap-3 rounded-b-2xl">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="px-5 py-2.5 rounded-full font-bold text-xs bg-fb-surface-hover text-fb-text hover:bg-fb-surface-hover/80 transition-colors"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                onClick={ztteam_handleManualCreate}
-                disabled={isCreatingQueueItem || !createPostId}
-                className="px-6 py-2.5 rounded-full font-black text-xs bg-gradient-to-r from-fb-blue to-cyan-500 hover:opacity-90 text-white transition-all flex items-center gap-2 shadow-md shadow-blue-500/20 disabled:opacity-50"
-              >
-                {isCreatingQueueItem ? (
-                  <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
-                ) : (
-                  <span className="material-symbols-outlined text-[16px]">{manualCreateFormat === 'image' ? 'photo_camera' : 'movie'}</span>
-                )}
-                Tạo {manualCreateFormat === 'image' ? 'Ảnh 2K' : 'Reel'} Ngay
-              </button>
+            {/** History List */}
+            <div className="p-6">
+              {isLoadingQueue ? (
+                <div className="py-20 text-center text-fb-text-muted flex flex-col items-center justify-center">
+                  <span className="material-symbols-outlined animate-spin text-4xl text-fb-blue mb-3">refresh</span>
+                  <span className="text-sm font-bold">Đang tải lịch sử đăng bài...</span>
+                </div>
+              ) : historyItems.length === 0 ? (
+                <div className="py-16 text-center text-fb-text-muted flex flex-col items-center justify-center bg-fb-surface-hover/20 rounded-2xl border border-dashed border-fb-surface-hover/50">
+                  <span className="material-symbols-outlined text-5xl mb-3 text-fb-text-muted/40">history_toggle_off</span>
+                  <p className="text-base font-bold text-fb-text">Chưa có bài viết nào được đăng</p>
+                  <p className="text-xs text-fb-text-muted mt-1 max-w-md">
+                    Các bài viết sau khi được xuất bản tự động theo lịch hoặc khi bạn bấm "Đăng ngay" sẽ được lưu trữ tại đây.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {historyItems.map((item) => (
+                    <ZTTeamAIPostCard
+                      key={item.id}
+                      item={item}
+                      pageName={pageName}
+                      pageAvatar={pageAvatar}
+                      fbPageId={fbPageId}
+                      isPosting={isPosting[item.id] || false}
+                      onPostNow={(it) => ztteam_publishNow(it)}
+                      onRetry={(it) => ztteam_retryQueueItem(it)}
+                      onDelete={(it) => ztteam_deleteQueueItem(it)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+
           </div>
         </div>
       )}
