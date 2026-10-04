@@ -244,8 +244,8 @@ export default function FacebookPageSettings() {
         tags,
         post_format: postFormat,
         auto_publish_enabled: autoPublishEnabled,
-        add_link_to_caption: addLinkToCaption,
-        add_link_to_comment: addLinkToComment,
+        add_link_to_caption: false,
+        add_link_to_comment: false,
         schedule_mode: scheduleMode,
         schedule_fixed_times: scheduleFixedTimes,
         schedule_immediate_gap_minutes: scheduleImmediateGap,
@@ -596,35 +596,35 @@ export default function FacebookPageSettings() {
                 </p>
               </div>
 
-              <div className="space-y-3 pt-2">
-                <label className="block text-xs font-bold text-fb-text-muted uppercase">Tùy chọn đính kèm link bài viết gốc</label>
-                <div className="flex items-center gap-3 bg-fb-surface-hover/30 p-3.5 rounded-xl border border-fb-surface-hover/50 hover:border-fb-surface-hover transition-colors">
-                  <button
-                    onClick={() => setAddLinkToCaption(!addLinkToCaption)}
-                    className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
-                      addLinkToCaption ? 'bg-fb-blue' : 'bg-black/30 shadow-inner border border-white/5'
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${addLinkToCaption ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
-                  <div className="cursor-pointer" onClick={() => setAddLinkToCaption(!addLinkToCaption)}>
-                    <p className="text-xs font-bold text-fb-text">Chèn link website vào Caption bài đăng</p>
-                    <p className="text-[10px] text-fb-text-muted">Đính kèm đường dẫn website WordPress vào cuối caption để người đọc bấm vào đọc toàn bộ câu chuyện.</p>
+              {/** Cơ chế điều hướng Link & Tương tác thông minh 2 bước */}
+              <div className="pt-2">
+                <div className="bg-fb-surface-hover/30 p-4 rounded-2xl border border-fb-blue/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-cyan-400 text-[18px]">verified</span>
+                      <span className="text-xs font-bold text-fb-text uppercase tracking-wider">Cơ chế điều hướng Link & Tương tác 2 bước</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Tự động 100%
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3 bg-fb-surface-hover/30 p-3.5 rounded-xl border border-fb-surface-hover/50 hover:border-fb-surface-hover transition-colors">
-                  <button
-                    onClick={() => setAddLinkToComment(!addLinkToComment)}
-                    className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
-                      addLinkToComment ? 'bg-fb-blue' : 'bg-black/30 shadow-inner border border-white/5'
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${addLinkToComment ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
-                  <div className="cursor-pointer" onClick={() => setAddLinkToComment(!addLinkToComment)}>
-                    <p className="text-xs font-bold text-fb-text">Tự động bình luận Link vào bài viết (First Comment)</p>
-                    <p className="text-[10px] text-fb-text-muted">Nick Fanpage sẽ tự động thả bình luận đầu tiên chứa link đọc bài viết trọn bộ ngay sau khi đăng bài.</p>
+                  <div className="space-y-2 text-[11px] text-fb-text-muted leading-relaxed">
+                    <div className="flex items-start gap-2 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                      <span className="material-symbols-outlined text-cyan-400 text-[16px] mt-0.5 shrink-0">check_circle</span>
+                      <div>
+                        <strong className="text-fb-text block">Caption sạch — Tránh bị Facebook bóp tương tác:</strong>
+                        <span>Không chèn link trực tiếp vào Caption. Hệ thống tự động gắn câu kết chuẩn: <code>...FULL STORY IN THE COMMENT 👇👇👇</code></span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                      <span className="material-symbols-outlined text-emerald-400 text-[16px] mt-0.5 shrink-0">mark_chat_read</span>
+                      <div>
+                        <strong className="text-fb-text block">Quy trình Bình luận 2 bước tối ưu Reach:</strong>
+                        <span><strong>Sau 60 phút:</strong> Tự động thả bình luận mồi câu "YES" kích hoạt thuật toán; <strong>Sau 15 phút tiếp theo:</strong> Tự động reply vào bình luận mồi kèm Part 2 và link website WordPress.</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
