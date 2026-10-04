@@ -209,6 +209,7 @@ export class ZTTeamRenderController {
     
     const pageNextTimeMap = new Map<string, Date | null>();
     const reelScheduledTimeMap = new Map<string, Date | null>();
+    const ztteam_now = new Date();
 
     for (const pending of allPending) {
        const pageId = pending.page_id;
@@ -217,7 +218,11 @@ export class ZTTeamRenderController {
 
        let baseTime = pageNextTimeMap.get(pageId);
        if (!baseTime) {
-         baseTime = lastPostedMap.get(pageId) || pending.updated_at;
+         const lastPost = lastPostedMap.get(pageId);
+         /** ZTTeam: Nếu bài đăng gần nhất đã ở quá khứ hoặc chưa có, mốc tính bắt buộc phải từ thời điểm hiện tại trở đi */
+         baseTime = (lastPost && lastPost.getTime() > ztteam_now.getTime()) ? lastPost : ztteam_now;
+       } else if (baseTime.getTime() < ztteam_now.getTime()) {
+         baseTime = ztteam_now;
        }
 
        let scheduledAt: Date | null = null;
@@ -225,17 +230,31 @@ export class ZTTeamRenderController {
        if (p.auto_publish_enabled === false) {
          scheduledAt = null;
        } else if (p.schedule_mode === 'fixed') {
-         const times = p.schedule_fixed_times || [];
+         const times = (p.schedule_fixed_times || []).slice();
          if (times.length > 0) {
            times.sort();
            let found = false;
+
+           /** ZTTeam: Lấy ngày, tháng, năm của baseTime theo múi giờ chuẩn Việt Nam (Asia/Ho_Chi_Minh - UTC+7) */
+           const vnBaseDateParts = new Intl.DateTimeFormat('en-US', {
+             timeZone: 'Asia/Ho_Chi_Minh',
+             year: 'numeric',
+             month: 'numeric',
+             day: 'numeric',
+           }).formatToParts(baseTime);
+
+           const vnYear = parseInt(vnBaseDateParts.find(pt => pt.type === 'year')?.value || '2026', 10);
+           const vnMonth = parseInt(vnBaseDateParts.find(pt => pt.type === 'month')?.value || '1', 10) - 1;
+           const vnDay = parseInt(vnBaseDateParts.find(pt => pt.type === 'day')?.value || '1', 10);
+
            for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
              for (const time of times) {
                const [h, m] = time.split(':').map(Number);
-               const testDate = new Date(baseTime);
-               testDate.setDate(testDate.getDate() + dayOffset);
-               testDate.setHours(h, m, 0, 0);
-               if (testDate > baseTime) {
+               /** ZTTeam: Múi giờ Việt Nam là UTC+7, nên giờ UTC = h - 7 */
+               const utcTimestamp = Date.UTC(vnYear, vnMonth, vnDay + dayOffset, h - 7, m, 0, 0);
+               const testDate = new Date(utcTimestamp);
+
+               if (testDate.getTime() > baseTime.getTime() && testDate.getTime() > ztteam_now.getTime()) {
                  scheduledAt = testDate;
                  found = true;
                  break;
@@ -250,13 +269,15 @@ export class ZTTeamRenderController {
          const gap = p.schedule_immediate_gap_minutes || 0;
          const diff = gap * 60000;
          const candidate = new Date(baseTime.getTime() + diff);
-         scheduledAt = candidate > pending.updated_at ? candidate : pending.updated_at;
+         scheduledAt = candidate.getTime() > ztteam_now.getTime() ? candidate : ztteam_now;
        } else {
          scheduledAt = null;
        }
 
        reelScheduledTimeMap.set(pending.id, scheduledAt);
-       pageNextTimeMap.set(pageId, scheduledAt);
+       if (scheduledAt) {
+         pageNextTimeMap.set(pageId, scheduledAt);
+       }
     }
 
     /** Generate final_caption dynamically for UI preview and add timestamps */

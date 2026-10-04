@@ -215,34 +215,53 @@ export class ZTTeamFacebookService {
     if (page.auto_publish_enabled === false) {
       nextPublishTime = null;
     } else if (page.schedule_mode === 'immediate') {
+      const ztteam_now = new Date();
       if (lastPublishTime) {
-        nextPublishTime = new Date(new Date(lastPublishTime).getTime() + page.schedule_immediate_gap_minutes * 60000);
+        const candidate = new Date(new Date(lastPublishTime).getTime() + page.schedule_immediate_gap_minutes * 60000);
+        nextPublishTime = candidate.getTime() > ztteam_now.getTime() ? candidate : ztteam_now;
       } else {
-        nextPublishTime = new Date();
+        nextPublishTime = ztteam_now;
       }
     } else if (page.schedule_mode === 'fixed' && page.schedule_fixed_times.length > 0) {
-      const now = new Date();
-      const nowMs = now.getHours() * 60 + now.getMinutes();
+      const ztteam_now = new Date();
+      /** ZTTeam: Lấy giờ, phút, ngày theo múi giờ chuẩn Việt Nam (Asia/Ho_Chi_Minh - UTC+7) */
+      const ztteam_vnFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      });
+      const ztteam_parts = ztteam_vnFormatter.formatToParts(ztteam_now);
+      const ztteam_vnH = parseInt(ztteam_parts.find(p => p.type === 'hour')?.value || '0', 10);
+      const ztteam_vnM = parseInt(ztteam_parts.find(p => p.type === 'minute')?.value || '0', 10);
+      const ztteam_vnYear = parseInt(ztteam_parts.find(p => p.type === 'year')?.value || '2026', 10);
+      const ztteam_vnMonth = parseInt(ztteam_parts.find(p => p.type === 'month')?.value || '1', 10) - 1;
+      const ztteam_vnDay = parseInt(ztteam_parts.find(p => p.type === 'day')?.value || '1', 10);
 
-      let nextTime = null;
-      let minDiff = Infinity;
+      const ztteam_currentMinutes = ztteam_vnH * 60 + ztteam_vnM;
+      const ztteam_sortedTimes = [...page.schedule_fixed_times].sort();
+      let ztteam_foundTime: Date | null = null;
 
-      for (const t of page.schedule_fixed_times) {
+      /** ZTTeam: Tìm khung giờ tiếp theo còn lại trong ngày hôm nay */
+      for (const t of ztteam_sortedTimes) {
         const [h, m] = t.split(':').map(Number);
-        const tMs = h * 60 + m;
-        let diff = tMs - nowMs;
-        if (diff <= 0) {
-          diff += 24 * 60;
-        }
-        if (diff < minDiff) {
-          minDiff = diff;
-          nextTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
-          if (tMs <= nowMs) {
-            nextTime.setDate(nextTime.getDate() + 1);
-          }
+        const tMinutes = h * 60 + m;
+        if (tMinutes > ztteam_currentMinutes) {
+          ztteam_foundTime = new Date(Date.UTC(ztteam_vnYear, ztteam_vnMonth, ztteam_vnDay, h - 7, m, 0, 0));
+          break;
         }
       }
-      nextPublishTime = nextTime;
+
+      /** ZTTeam: Nếu tất cả khung giờ hôm nay đã qua, lấy khung giờ đầu tiên của ngày mai */
+      if (!ztteam_foundTime && ztteam_sortedTimes.length > 0) {
+        const [h, m] = ztteam_sortedTimes[0].split(':').map(Number);
+        ztteam_foundTime = new Date(Date.UTC(ztteam_vnYear, ztteam_vnMonth, ztteam_vnDay + 1, h - 7, m, 0, 0));
+      }
+
+      nextPublishTime = ztteam_foundTime;
     }
 
     const nextReelToPublish = await this.prisma.ztteam_reels.findFirst({
