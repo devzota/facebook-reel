@@ -475,12 +475,13 @@ export class ZTTeamPublisherCron {
 
       /** Bước 1: Quét các bài viết đăng sau 60 phút nhưng chưa đăng comment mồi (comment_step = 0) */
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const step0Images = await this.prisma.ztteam_images.findMany({
         where: {
           is_posted: true,
           fb_post_id: { not: null },
           comment_step: 0,
-          posted_at: { lte: oneHourAgo }
+          posted_at: { gte: oneDayAgo, lte: oneHourAgo }
         },
         include: {
           page: {
@@ -495,17 +496,19 @@ export class ZTTeamPublisherCron {
 
         try {
           const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
-          const hookCommentId = await this.facebookService.ztteam_publishComment(
+          const res = await this.facebookService.ztteam_publishComment(
             img.page.fb_page_id,
             img.fb_post_id,
             hookText
           );
 
+          const hookCommentId = typeof res === 'object' && res?.id ? String(res.id) : (typeof res === 'string' ? res : null);
+
           await this.prisma.ztteam_images.update({
             where: { id: img.id },
             data: {
               comment_step: 1,
-              hook_comment_id: hookCommentId || null,
+              hook_comment_id: hookCommentId,
               hook_comment_at: new Date()
             }
           });
@@ -513,6 +516,14 @@ export class ZTTeamPublisherCron {
           this.logger.log(`[Auto-Comment Step 1] Posted YES hook comment for image ${img.id} (Post ${img.fb_post_id}, Comment ID: ${hookCommentId})`);
         } catch (err: any) {
           this.logger.error(`[Auto-Comment Step 1] Failed for image ${img.id}: ${err.message}`);
+          /** Fail-safe: Cap nhat comment_step = 2 de khong bi ket loop vo tan khi gap loi Permissions hoac loi token */
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: {
+              comment_step: 2,
+              error_log: `Lỗi comment mồi: ${err.message}`
+            }
+          }).catch(() => {});
         }
       }
 
@@ -565,6 +576,14 @@ export class ZTTeamPublisherCron {
           this.logger.log(`[Auto-Comment Step 2] Successfully replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id}`);
         } catch (err: any) {
           this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id}: ${err.message}`);
+          /** Fail-safe: Cap nhat comment_step = 2 de ket thuc quy trinh, khong bi loop */
+          await this.prisma.ztteam_images.update({
+            where: { id: img.id },
+            data: {
+              comment_step: 2,
+              error_log: `Lỗi reply Part 2: ${err.message}`
+            }
+          }).catch(() => {});
         }
       }
     } catch (error: any) {
