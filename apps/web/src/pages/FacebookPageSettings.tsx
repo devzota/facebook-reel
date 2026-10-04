@@ -98,16 +98,16 @@ export default function FacebookPageSettings() {
     }
   }, [id]);
 
-  /** Load Queue on Tab 2 or format switch */
+  /** Load Queue on Tab 2 (Hàng Đợi) or Tab 3 (Lịch Sử) */
   useEffect(() => {
-    if (activeTab === 2) {
+    if (activeTab === 2 || activeTab === 3) {
       ztteam_loadQueue();
     }
-  }, [activeTab, id, queueTab]);
+  }, [activeTab, id]);
 
-  /** SSE Live Updates for Tab 2 */
+  /** SSE Live Updates for Tab 2 & Tab 3 */
   useEffect(() => {
-    if (activeTab !== 2) return;
+    if (activeTab !== 2 && activeTab !== 3) return;
 
     const sseImage = new EventSource('/api/image/events');
     sseImage.onmessage = (e) => {
