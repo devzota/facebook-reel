@@ -194,29 +194,29 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
           </span>
         </div>
 
-        {/** ZTTeam: Khối Tóm Tắt & Đánh Giá Mức Độ Hoàn Thiện Cấu Hình */}
-        <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/60 flex flex-col gap-2.5 text-xs shadow-inner">
-          {/** Tiêu đề & Badge Đầy đủ / Cần cấu hình */}
-          <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+        {/** ZTTeam: Khối Tóm Tắt & Đánh Giá Cấu Hình - Sử dụng Shadow & Elevation thay vì Border */}
+        <div className="p-3 rounded-xl bg-slate-900/80 shadow-md shadow-black/40 flex flex-col gap-2.5 text-xs">
+          {/** Tiêu đề & Badge Đầy đủ / Cần cấu hình (Shadow thay cho Border) */}
+          <div className="flex items-center justify-between gap-2 pb-1.5">
             <span className="text-[11px] font-bold text-fb-text uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm text-cyan-400">tune</span>
               Cấu hình hoạt động
             </span>
             {isConfigComplete ? (
-              <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
+              <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 shadow-sm shadow-emerald-500/25 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
                 <span className="material-symbols-outlined text-xs">check_circle</span> Đầy đủ
               </span>
             ) : (
-              <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
+              <span className="px-2.5 py-0.5 bg-amber-500/15 text-amber-400 shadow-sm shadow-amber-500/25 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
                 <span className="material-symbols-outlined text-xs">warning</span> Cần cấu hình
               </span>
             )}
           </div>
 
-          {/** Lưới 2 Cột x 2 Hàng thông số cốt lõi */}
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
+          {/** Lưới 2 Cột x 2 Hàng thông số - Mỗi ô có shadow nhẹ làm nổi bật */}
+          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
             {/** 1. Nguồn cào */}
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25">
               <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">language</span>
               <div className="truncate">
                 <span className="text-fb-text-muted">Nguồn: </span>
@@ -229,7 +229,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             </div>
 
             {/** 2. Định dạng đăng */}
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25">
               <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">
                 {page.postFormat === 'reel' ? 'movie' : page.postFormat === 'mixed' ? 'auto_awesome_motion' : 'photo_library'}
               </span>
@@ -240,7 +240,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             </div>
 
             {/** 3. Lịch đăng */}
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25">
               <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">schedule</span>
               <div className="truncate">
                 <span className="text-fb-text-muted">Lịch: </span>
@@ -251,7 +251,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             </div>
 
             {/** 4. Hàng đợi bài chờ */}
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 bg-slate-800/40 p-2 rounded-lg shadow-sm shadow-black/25">
               <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">hourglass_top</span>
               <div className="truncate">
                 <span className="text-fb-text-muted">Hàng đợi: </span>
@@ -265,8 +265,8 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
           </div>
 
           {/** Dòng Đăng tiếp theo & Khung giờ chi tiết */}
-          <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-1 text-[10px]">
-            <div className="flex items-center justify-between gap-1">
+          <div className="pt-2 flex flex-col gap-1.5 text-[10px]">
+            <div className="flex items-center justify-between gap-1 bg-slate-800/30 px-2 py-1.5 rounded-lg shadow-sm shadow-black/20">
               <span className="text-fb-text-muted flex items-center gap-1">
                 <span className="material-symbols-outlined text-xs text-emerald-400">timer</span>
                 Đăng tiếp theo:
@@ -276,11 +276,11 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
               </span>
             </div>
             {page.scheduleMode === 'fixed' && fixedTimes.length > 0 && (
-              <div className="flex items-center gap-1 overflow-hidden text-slate-400">
+              <div className="flex items-center gap-1 overflow-hidden text-slate-400 px-1">
                 <span className="shrink-0 text-[10px] text-fb-text-muted">Khung giờ:</span>
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
                   {fixedTimes.map((t: string, idx: number) => (
-                    <span key={idx} className="px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded text-[9px] font-mono shrink-0">
+                    <span key={idx} className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[9px] font-mono shrink-0 shadow-sm shadow-black/20">
                       {t}
                     </span>
                   ))}
@@ -291,7 +291,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
 
           {/** Cảnh báo nếu chưa hoàn thiện cấu hình */}
           {!isConfigComplete && (
-            <div className="mt-0.5 p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 flex items-start gap-1">
+            <div className="mt-0.5 p-2 bg-amber-500/10 text-amber-300 rounded-lg text-[10px] flex items-start gap-1.5 shadow-sm shadow-amber-500/10">
               <span className="material-symbols-outlined text-xs shrink-0 mt-0.5 text-amber-400">info</span>
               <span className="truncate">
                 Cần: <strong className="font-semibold">{missingConfigs.join(' • ')}</strong>
