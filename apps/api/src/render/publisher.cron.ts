@@ -524,6 +524,16 @@ export class ZTTeamPublisherCron {
               error_log: `Lỗi comment mồi: ${err.message}`
             }
           }).catch(() => {});
+
+          /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
+          this.telegramService.ztteam_sendMessage(
+            `⚠️ *LỖI TỰ ĐỘNG BÌNH LUẬN (BƯỚC 1 - COMMENT MỒI)*\n\n` +
+            `• *Trang:* ${img.page?.name || 'N/A'}\n` +
+            `• *Bài viết:* ${img.wp_post_title || 'Ảnh 2K'}\n` +
+            `• *Post ID:* \`${img.fb_post_id}\`\n` +
+            `• *Chi tiết lỗi:* ${err.message}\n` +
+            `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
+          ).catch(() => {});
         }
       }
 
@@ -584,6 +594,16 @@ export class ZTTeamPublisherCron {
               error_log: `Lỗi reply Part 2: ${err.message}`
             }
           }).catch(() => {});
+
+          /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 2 về Telegram */
+          this.telegramService.ztteam_sendMessage(
+            `⚠️ *LỖI TỰ ĐỘNG BÌNH LUẬN (BƯỚC 2 - LINK BÀI)*\n\n` +
+            `• *Trang:* ${img.page?.name || 'N/A'}\n` +
+            `• *Bài viết:* ${img.wp_post_title || 'Ảnh 2K'}\n` +
+            `• *Post ID:* \`${img.fb_post_id}\`\n` +
+            `• *Chi tiết lỗi:* ${err.message}\n` +
+            `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
+          ).catch(() => {});
         }
       }
     } catch (error: any) {
