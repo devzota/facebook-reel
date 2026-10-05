@@ -127,7 +127,8 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
           reject(new Error('User cancelled login'));
         }
       }, { 
-          scope: 'pages_show_list,pages_manage_posts,pages_read_engagement',
+          /** ZTTeam: Bổ sung pages_manage_engagement và pages_read_user_content để có quyền tự động đăng bình luận và tương tác */
+          scope: 'pages_show_list,pages_manage_posts,pages_read_engagement,pages_manage_engagement,pages_read_user_content',
           auth_type: 'rerequest'
         });
     });
