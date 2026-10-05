@@ -28,6 +28,13 @@ export interface ZTTeamFanpage {
   defaultReelTemplateId?: string;
   defaultReelTemplateName?: string | null;
   nextVideoTitle?: string | null;
+  sourcesCount?: number;
+  pendingImagesCount?: number;
+  pendingReelsCount?: number;
+  totalPendingCount?: number;
+  addLinkToCaption?: boolean;
+  addLinkToComment?: boolean;
+  internalId?: string;
 }
 
 interface ZTTeamFacebookState {

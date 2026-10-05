@@ -69,6 +69,54 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
     }
   };
 
+  /** ZTTeam: Kiểm tra trạng thái cấu hình đầy đủ hay còn thiếu */
+  const missingConfigs: string[] = [];
+  const sourcesCount = page.sourcesCount ?? 0;
+  const pendingImages = page.pendingImagesCount ?? 0;
+  const pendingReels = page.pendingReelsCount ?? 0;
+  const totalPending = page.totalPendingCount ?? (pendingImages + pendingReels);
+  const fixedTimes = page.scheduleFixedTimes || [];
+
+  if (sourcesCount === 0) {
+    missingConfigs.push('Chưa có nguồn cào');
+  }
+  if (page.scheduleMode === 'fixed' && fixedTimes.length === 0) {
+    missingConfigs.push('Chưa cài khung giờ');
+  }
+  if (page.autoPublishEnabled === false) {
+    missingConfigs.push('Đang tắt tự động đăng');
+  }
+  if (totalPending === 0) {
+    missingConfigs.push('Hàng đợi rỗng (0 bài)');
+  }
+  const isConfigComplete = missingConfigs.length === 0;
+
+  /** ZTTeam: Định dạng nhãn hiển thị định dạng đăng */
+  const postFormatLabel =
+    page.postFormat === 'reel' ? 'Video Reel' :
+    page.postFormat === 'mixed' ? 'Ảnh 2K & Reel' : 'Bài viết Ảnh 2K';
+
+  /** ZTTeam: Định dạng nhãn hiển thị lịch đăng */
+  const scheduleLabel =
+    page.scheduleMode === 'immediate'
+      ? `Cách quãng ${page.scheduleImmediateGapMinutes || 60}p`
+      : `${fixedTimes.length} khung giờ/ngày`;
+
+  /** ZTTeam: Format thời gian đăng tiếp theo */
+  const ztteam_formatNextPublish = (dateStr?: string | null) => {
+    if (!dateStr) return 'Đang chờ khung giờ';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const today = new Date();
+      const isToday = d.toDateString() === today.toDateString();
+      const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      return isToday ? `${timeStr} (Hôm nay)` : `${timeStr} (${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const postUrl = `https://facebook.com/${page.fb_page_id || page.id}`;
 
   return (
@@ -144,6 +192,112 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             <span className="material-symbols-outlined text-[13px]">palette</span>
             {page.defaultReelTemplateName || 'Mặc định'}
           </span>
+        </div>
+
+        {/** ZTTeam: Khối Tóm Tắt & Đánh Giá Mức Độ Hoàn Thiện Cấu Hình */}
+        <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/60 flex flex-col gap-2.5 text-xs shadow-inner">
+          {/** Tiêu đề & Badge Đầy đủ / Cần cấu hình */}
+          <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+            <span className="text-[11px] font-bold text-fb-text uppercase tracking-wider flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-sm text-cyan-400">tune</span>
+              Cấu hình hoạt động
+            </span>
+            {isConfigComplete ? (
+              <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
+                <span className="material-symbols-outlined text-xs">check_circle</span> Đầy đủ
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-full text-[10px] font-black flex items-center gap-1 shrink-0">
+                <span className="material-symbols-outlined text-xs">warning</span> Cần cấu hình
+              </span>
+            )}
+          </div>
+
+          {/** Lưới 2 Cột x 2 Hàng thông số cốt lõi */}
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            {/** 1. Nguồn cào */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">language</span>
+              <div className="truncate">
+                <span className="text-fb-text-muted">Nguồn: </span>
+                {sourcesCount > 0 ? (
+                  <strong className="text-emerald-400 font-semibold">{sourcesCount} web</strong>
+                ) : (
+                  <strong className="text-amber-400 font-semibold">Chưa có</strong>
+                )}
+              </div>
+            </div>
+
+            {/** 2. Định dạng đăng */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">
+                {page.postFormat === 'reel' ? 'movie' : page.postFormat === 'mixed' ? 'auto_awesome_motion' : 'photo_library'}
+              </span>
+              <div className="truncate">
+                <span className="text-fb-text-muted">Dạng: </span>
+                <strong className="text-fb-text font-semibold">{postFormatLabel}</strong>
+              </div>
+            </div>
+
+            {/** 3. Lịch đăng */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">schedule</span>
+              <div className="truncate">
+                <span className="text-fb-text-muted">Lịch: </span>
+                <strong className={`font-semibold ${fixedTimes.length > 0 || page.scheduleMode === 'immediate' ? 'text-fb-text' : 'text-amber-400'}`}>
+                  {scheduleLabel}
+                </strong>
+              </div>
+            </div>
+
+            {/** 4. Hàng đợi bài chờ */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="material-symbols-outlined text-sm text-slate-400 shrink-0">hourglass_top</span>
+              <div className="truncate">
+                <span className="text-fb-text-muted">Hàng đợi: </span>
+                {totalPending > 0 ? (
+                  <strong className="text-emerald-400 font-semibold">{totalPending} bài chờ</strong>
+                ) : (
+                  <strong className="text-amber-400 font-semibold">0 bài chờ</strong>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/** Dòng Đăng tiếp theo & Khung giờ chi tiết */}
+          <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-1 text-[10px]">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-fb-text-muted flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs text-emerald-400">timer</span>
+                Đăng tiếp theo:
+              </span>
+              <span className="font-bold text-emerald-400">
+                {ztteam_formatNextPublish(page.nextPublishTime)}
+              </span>
+            </div>
+            {page.scheduleMode === 'fixed' && fixedTimes.length > 0 && (
+              <div className="flex items-center gap-1 overflow-hidden text-slate-400">
+                <span className="shrink-0 text-[10px] text-fb-text-muted">Khung giờ:</span>
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+                  {fixedTimes.map((t: string, idx: number) => (
+                    <span key={idx} className="px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded text-[9px] font-mono shrink-0">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/** Cảnh báo nếu chưa hoàn thiện cấu hình */}
+          {!isConfigComplete && (
+            <div className="mt-0.5 p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 flex items-start gap-1">
+              <span className="material-symbols-outlined text-xs shrink-0 mt-0.5 text-amber-400">info</span>
+              <span className="truncate">
+                Cần: <strong className="font-semibold">{missingConfigs.join(' • ')}</strong>
+              </span>
+            </div>
+          )}
         </div>
 
         {/** Khối Biểu Đồ Sparkline Xu Hướng (3 Mini Charts: Lượt xem, Theo dõi, Tương tác) */}

@@ -306,8 +306,18 @@ export class ZTTeamFacebookService {
 
     const result = await Promise.all(pages.map(async p => {
       const times = await this.ztteam_computePageTimesAndNextVideo(p);
+
+      /** ZTTeam: Đếm số lượng bài viết đang chờ xuất bản trong hàng đợi */
+      const pendingImagesCount = await this.prisma.ztteam_images.count({
+        where: { page_id: p.id, is_posted: false, status: { in: ['QUEUED', 'RENDERING', 'COMPLETED'] } }
+      });
+      const pendingReelsCount = await this.prisma.ztteam_reels.count({
+        where: { page_id: p.id, is_posted: false, status: { in: ['QUEUED', 'RENDERING', 'COMPLETED'] } }
+      });
+
       return {
         id: p.fb_page_id,
+        internalId: p.id,
         name: p.name,
         category: p.category,
         followersCount: p.follower_count,
@@ -320,6 +330,8 @@ export class ZTTeamFacebookService {
         scheduleMode: p.schedule_mode,
         autoPublishEnabled: p.auto_publish_enabled,
         autoCreateEnabled: p.auto_create_enabled,
+        addLinkToCaption: p.add_link_to_caption,
+        addLinkToComment: p.add_link_to_comment,
         nextPublishTime: times.nextPublishTime,
         nextRenderTime: times.nextRenderTime,
         scheduleFixedTimes: p.schedule_fixed_times,
@@ -327,7 +339,11 @@ export class ZTTeamFacebookService {
         autoScanIntervalHours: p.auto_scan_interval_hours,
         defaultReelTemplateId: p.default_reel_template_id,
         defaultReelTemplateName: times.templateName,
-        nextVideoTitle: times.nextVideoTitle
+        nextVideoTitle: times.nextVideoTitle,
+        sourcesCount: p.sources ? p.sources.filter(s => s.is_active).length : 0,
+        pendingImagesCount,
+        pendingReelsCount,
+        totalPendingCount: pendingImagesCount + pendingReelsCount,
         /** We do not send accessToken back to frontend for security */
       };
     }));
