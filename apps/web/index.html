@@ -15,8 +15,11 @@
     <!-- Load Facebook SDK -->
     <script>
       window.fbAsyncInit = function() {
+        /** ZTTeam: Kiểm tra và fallback về App ID mặc định nếu biến môi trường chưa được inject */
+        var rawAppId = '%VITE_FB_APP_ID%';
+        var appId = (rawAppId && !rawAppId.includes('%')) ? rawAppId : '1346835604110691';
         FB.init({
-          appId      : '%VITE_FB_APP_ID%',
+          appId      : appId,
           cookie     : true,
           xfbml      : true,
           version    : 'v20.0'

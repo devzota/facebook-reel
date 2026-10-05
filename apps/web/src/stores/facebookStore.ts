@@ -101,36 +101,66 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
   ztteam_loginWithFacebook: async () => {
     set({ isLoading: true, error: null });
     return new Promise((resolve, reject) => {
-      if (!window.FB) {
-        set({ error: 'Facebook SDK is not loaded', isLoading: false });
-        reject(new Error('Facebook SDK is not loaded'));
-        return;
-      }
-      
-      window.FB.login((response: any) => {
-        if (response.authResponse) {
-          const { accessToken, userID } = response.authResponse;
-          
-          /** Gửi token ngắn hạn cho Backend đổi lấy token dài hạn */
-          api.post('/facebook/exchange-token', { shortToken: accessToken, fbAccountId: userID })
-            .then(() => {
-              set({ isConnected: true, fbAccountId: userID, isLoading: false });
-              return get().ztteam_fetchPages();
-            })
-            .then(() => resolve())
-            .catch((error) => {
-              set({ error: error.response?.data?.message || 'Failed to exchange token', isLoading: false });
-              reject(error);
-            });
-        } else {
-          set({ error: 'User cancelled login or did not fully authorize.', isLoading: false });
-          reject(new Error('User cancelled login'));
+      const ztteam_triggerLogin = () => {
+        if (!window.FB) {
+          set({ error: 'Facebook SDK chưa tải xong, vui lòng thử lại sau vài giây', isLoading: false });
+          reject(new Error('Facebook SDK is not loaded'));
+          return;
         }
-      }, { 
-          /** ZTTeam: Bổ sung pages_manage_engagement và pages_read_user_content để có quyền tự động đăng bình luận và tương tác */
-          scope: 'pages_show_list,pages_manage_posts,pages_read_engagement,pages_manage_engagement,pages_read_user_content',
-          auth_type: 'rerequest'
-        });
+
+        try {
+          /** ZTTeam: Đảm bảo FB.init luôn được kích hoạt an toàn với App ID chuẩn trước khi gọi login */
+          const rawAppId = import.meta.env.VITE_FB_APP_ID;
+          const appId = (rawAppId && !rawAppId.includes('%')) ? rawAppId : '1346835604110691';
+          window.FB.init({
+            appId      : appId,
+            cookie     : true,
+            xfbml      : true,
+            version    : 'v20.0'
+          });
+        } catch (e) {
+          /** Đã init trước đó */
+        }
+
+        window.FB.login((response: any) => {
+          if (response.authResponse) {
+            const { accessToken, userID } = response.authResponse;
+            
+            /** Gửi token ngắn hạn cho Backend đổi lấy token dài hạn */
+            api.post('/facebook/exchange-token', { shortToken: accessToken, fbAccountId: userID })
+              .then(() => {
+                set({ isConnected: true, fbAccountId: userID, isLoading: false });
+                return get().ztteam_fetchPages();
+              })
+              .then(() => resolve())
+              .catch((error) => {
+                set({ error: error.response?.data?.message || 'Failed to exchange token', isLoading: false });
+                reject(error);
+              });
+          } else {
+            set({ error: 'User cancelled login or did not fully authorize.', isLoading: false });
+            reject(new Error('User cancelled login'));
+          }
+        }, { 
+            /** ZTTeam: Bổ sung pages_manage_engagement và pages_read_user_content để có quyền tự động đăng bình luận và tương tác */
+            scope: 'pages_show_list,pages_manage_posts,pages_read_engagement,pages_manage_engagement,pages_read_user_content',
+            auth_type: 'rerequest'
+          });
+      };
+
+      if (!window.FB) {
+        window.addEventListener('fbSDKLoaded', ztteam_triggerLogin, { once: true });
+        setTimeout(() => {
+          if (window.FB) {
+            ztteam_triggerLogin();
+          } else {
+            set({ error: 'Không thể kết nối với Facebook SDK. Vui lòng kiểm tra lại tiện ích chặn quảng cáo/Adblock.', isLoading: false });
+            reject(new Error('Facebook SDK is not loaded'));
+          }
+        }, 2000);
+      } else {
+        ztteam_triggerLogin();
+      }
     });
   },
 

@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /usr/src/app
 
+ARG VITE_FB_APP_ID=1346835604110691
+ENV VITE_FB_APP_ID=$VITE_FB_APP_ID
+
 # Copy root & workspaces package files
 COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
