@@ -89,16 +89,16 @@ export class ZTTeamPublisherCron {
          * Điều này giúp ngăn chặn việc cố đăng liên tục nhiều bài nếu bài đầu tiên bị lỗi (vì vẫn nằm trong khung 5 phút). 
          */
         const lastPostedReel = await this.prisma.ztteam_reels.findFirst({
-          where: { 
-            page_id: pageId, 
-            OR: [{ is_posted: true }, { status: 'FAILED' }] 
+          where: {
+            page_id: pageId,
+            OR: [{ is_posted: true }, { status: 'FAILED' }]
           },
           orderBy: { updated_at: 'desc' }
         });
         const lastPostedImage = await this.prisma.ztteam_images.findFirst({
-          where: { 
-            page_id: pageId, 
-            OR: [{ is_posted: true }, { status: 'FAILED' }] 
+          where: {
+            page_id: pageId,
+            OR: [{ is_posted: true }, { status: 'FAILED' }]
           },
           orderBy: { updated_at: 'desc' }
         });
@@ -184,41 +184,53 @@ export class ZTTeamPublisherCron {
         let selectedItem: { type: 'reel_legacy' | 'image_reel' | 'image_only'; data: any } | null = null;
 
         if (post_format === 'reel') {
-          /** Cấu hình: CHỈ ĐĂNG VIDEO REEL - Tuyệt đối không fallback sang ảnh nếu chưa có video */
+          /** Cấu hình: Nếu chọn reel thì đăng reel, nếu bài chuẩn bị đăng ko có reel thì đăng ảnh (đảm bảo phải có bài để đăng) */
           if (allAvailableReels.length > 0) {
             selectedItem = allAvailableReels[0];
+          } else if (allAvailableImages.length > 0) {
+            selectedItem = allAvailableImages[0];
+          } else if (pageImagesWithVideo.length > 0) {
+            selectedItem = { type: 'image_only', data: pageImagesWithVideo[0] };
           }
         } else if (post_format === 'image') {
-          /** Cấu hình: CHỈ ĐĂNG ẢNH */
+          /** Cấu hình: Nếu chọn ảnh thì chắc chắn phải đăng ảnh */
           if (allAvailableImages.length > 0) {
             selectedItem = allAvailableImages[0];
           } else if (pageImagesWithVideo.length > 0) {
             selectedItem = { type: 'image_only', data: pageImagesWithVideo[0] };
           }
         } else {
-          /** Cấu hình: MIXED (Luân phiên Reel và Ảnh) */
+          /** Cấu hình: Nếu chọn ảnh và reel xen kẽ thì đăng đúng chuẩn, trường hợp reel ko có vẫn đăng ảnh */
           if (lastPostType === 'reel') {
+            /** Lượt trước đăng Reel -> Lượt này đăng Ảnh */
             if (allAvailableImages.length > 0) {
               selectedItem = allAvailableImages[0];
-            } else if (allAvailableReels.length > 0) {
-              selectedItem = allAvailableReels[0];
+            } else if (pageImagesWithVideo.length > 0) {
+              selectedItem = { type: 'image_only', data: pageImagesWithVideo[0] };
             }
           } else {
+            /** Lượt trước đăng Ảnh -> Lượt này đăng Reel. Trường hợp reel ko có vẫn đăng ảnh */
             if (allAvailableReels.length > 0) {
               selectedItem = allAvailableReels[0];
             } else if (allAvailableImages.length > 0) {
               selectedItem = allAvailableImages[0];
+            } else if (pageImagesWithVideo.length > 0) {
+              selectedItem = { type: 'image_only', data: pageImagesWithVideo[0] };
             }
           }
         }
 
-        /** 6. Tiến hành đăng bài duy nhất cho Page này */
+        /** 6. Tiến hành đăng bài duy nhất: Nếu ko đáp ứng đc các điều kiện trên ko đăng, tức là ko gọi API đăng */
         if (selectedItem) {
           if (selectedItem.type === 'reel_legacy') {
             await this.ztteam_publishReel(selectedItem.data, page);
+          } else if (selectedItem.type === 'image_only') {
+            await this.ztteam_publishImage(selectedItem.data, page, true);
           } else {
-            await this.ztteam_publishImage(selectedItem.data, page);
+            await this.ztteam_publishImage(selectedItem.data, page, false);
           }
+        } else {
+          this.logger.log(`Page ${page.name}: Không có bài viết đáp ứng điều kiện theo cấu hình "${post_format}" -> Bỏ qua, không gọi API đăng Facebook.`);
         }
       }
     } catch (error: any) {
@@ -351,8 +363,8 @@ export class ZTTeamPublisherCron {
   /**
    * Đăng bài ảnh lên Facebook Page
    */
-  private async ztteam_publishImage(image: any, page: any) {
-    this.logger.log(`Auto-publishing image ${image.id} to page ${page.name}...`);
+  private async ztteam_publishImage(image: any, page: any, forceImageOnly = false) {
+    this.logger.log(`Auto-publishing image ${image.id} to page ${page.name} (forceImageOnly: ${forceImageOnly})...`);
 
     try {
       let absoluteImagePath = ztteam_getImagesPath(image.id, 'output.png');
@@ -410,8 +422,8 @@ export class ZTTeamPublisherCron {
       }
 
       let fbPostId: string;
-      /** ZTTeam: Nếu bài viết đã tạo Video Reel, ưu tiên xuất bản Reel/Video lên Facebook */
-      if (image.video_url) {
+      /** ZTTeam: Nếu bài viết đã tạo Video Reel và không bắt buộc chỉ đăng ảnh, ưu tiên xuất bản Reel/Video lên Facebook */
+      if (image.video_url && !forceImageOnly) {
         let absoluteVideoPath = '';
         if (image.video_url.startsWith('/storage/')) {
           absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^\/storage\//, ''));
@@ -564,7 +576,7 @@ export class ZTTeamPublisherCron {
               comment_step: 2,
               error_log: `Lỗi comment mồi: ${err.message}`
             }
-          }).catch(() => {});
+          }).catch(() => { });
 
           /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 1 về Telegram */
           this.telegramService.ztteam_sendMessage(
@@ -574,7 +586,7 @@ export class ZTTeamPublisherCron {
             `• *Post ID:* \`${img.fb_post_id}\`\n` +
             `• *Chi tiết lỗi:* ${err.message}\n` +
             `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
 
@@ -634,7 +646,7 @@ export class ZTTeamPublisherCron {
               comment_step: 2,
               error_log: `Lỗi reply Part 2: ${err.message}`
             }
-          }).catch(() => {});
+          }).catch(() => { });
 
           /** ZTTeam: Bắn thông báo cảnh báo lỗi bình luận Step 2 về Telegram */
           this.telegramService.ztteam_sendMessage(
@@ -644,7 +656,7 @@ export class ZTTeamPublisherCron {
             `• *Post ID:* \`${img.fb_post_id}\`\n` +
             `• *Chi tiết lỗi:* ${err.message}\n` +
             `• *Thời gian:* ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
     } catch (error: any) {

@@ -47,15 +47,16 @@ export default function ZTTeamAIPostCard({
   const resolvedAvatar = pageAvatar || item.page?.avatar;
   const resolvedFbPageId = fbPageId || item.page?.fb_page_id;
 
-  /** Format Date (uses updated_at if present to reflect recent crawl/render time, fallback to created_at) */
+  /** Format Date: Định dạng ngắn gọn HH:mm dd/MM (ví dụ: 16:30 07/10) */
   const ztteam_formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Vừa xong';
-    return new Date(dateStr).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if (!dateStr) return '--';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '--';
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const mon = String(d.getMonth() + 1).padStart(2, '0');
+    return `${h}:${m} ${day}/${mon}`;
   };
 
   /** Status Badge */
@@ -177,23 +178,23 @@ export default function ZTTeamAIPostCard({
         <div>{ztteam_renderStatusBadge()}</div>
       </div>
 
-      {/** 2.1. Timeline Info Bar (Thời gian tạo bài, tạo ảnh, tạo video, lịch đăng dự kiến, thời điểm đã đăng) */}
-      <div className="px-4 py-2 bg-fb-surface-hover/20 border-y border-fb-surface-hover/40 grid grid-cols-3 gap-1.5 text-[10px]">
-        <div className="flex items-center gap-1 text-fb-text-muted truncate">
-          <span className="material-symbols-outlined text-[13px] text-cyan-400 shrink-0">edit_calendar</span>
-          <span className="truncate">Tạo bài: <strong className="text-white/80 font-medium">{ztteam_formatDate(item.created_at)}</strong></span>
+      {/** 2.1. Timeline Info Bar (Thời gian POST, IMG, Video) */}
+      <div className="px-3 py-1.5 bg-fb-surface-hover/20 border-y border-fb-surface-hover/40 grid grid-cols-3 gap-1 text-[10px]">
+        <div className="text-fb-text-muted truncate min-w-0" title={`Tạo bài viết: ${ztteam_formatDate(item.created_at)}`}>
+          <span className="font-extrabold text-cyan-400">POST:</span>{' '}
+          <strong className="text-white/90 font-medium">{ztteam_formatDate(item.created_at)}</strong>
         </div>
 
-        <div className="flex items-center gap-1 text-fb-text-muted truncate">
-          <span className="material-symbols-outlined text-[13px] text-blue-400 shrink-0">image</span>
-          <span className="truncate">Tạo ảnh: <strong className="text-white/80 font-medium">{item.image_url ? ztteam_formatDate(item.updated_at) : 'Đang xử lý'}</strong></span>
+        <div className="text-fb-text-muted truncate min-w-0" title={`Tạo ảnh: ${item.image_url ? ztteam_formatDate(item.updated_at) : '--'}`}>
+          <span className="font-extrabold text-blue-400">IMG:</span>{' '}
+          <strong className="text-white/90 font-medium">{item.image_url ? ztteam_formatDate(item.updated_at) : '--'}</strong>
         </div>
 
-        <div className="flex items-center gap-1 text-fb-text-muted truncate">
-          <span className="material-symbols-outlined text-[13px] text-amber-400 shrink-0">movie</span>
-          <span className="truncate">Tạo video: <strong className="text-white/80 font-medium">
-            {item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : 'Chưa tạo'))}
-          </strong></span>
+        <div className="text-fb-text-muted truncate min-w-0" title={`Tạo video: ${item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : '--'))}`}>
+          <span className="font-extrabold text-amber-400">Video:</span>{' '}
+          <strong className="text-white/90 font-medium">
+            {item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : '--'))}
+          </strong>
         </div>
 
         {isAlreadyPosted ? (
