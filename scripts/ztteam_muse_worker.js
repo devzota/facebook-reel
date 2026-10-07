@@ -10,7 +10,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 
 /** Cấu hình kết nối */
-const VPS_BASE_URL = process.env.VPS_API_URL || 'http://169.58.122.248:3000';
+const VPS_BASE_URL = process.env.VPS_API_URL || 'http://169.58.122.248:3001';
 const API_URL = `${VPS_BASE_URL}/api`;
 const CHROME_DEBUG_URL = process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222';
 const POLL_INTERVAL_MS = 15000; /** 15 giây kiểm tra hàng đợi một lần */
