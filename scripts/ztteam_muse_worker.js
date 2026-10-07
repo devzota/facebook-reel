@@ -85,12 +85,15 @@ async function ztteam_processVideoJobOnMuse(job) {
       }
       await page.bringToFront();
 
-      /** Đếm số video hiện có (loại trừ avatar tròn 480x480) */
-      const initialVideosCount = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('video')).filter(v => {
-          const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
-          return !isAvatar;
-        }).length;
+      /** Ghi nhận danh sách các video stream và nút download hiện có trước khi gửi prompt */
+      const initialVideoSrcs = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('video'))
+          .filter(v => v.closest('.rounded-full') === null && (v.videoWidth !== 480 || v.videoHeight !== 480))
+          .map(v => v.src)
+          .filter(Boolean);
+      });
+      const initialDownloadBtnCount = await page.evaluate(() => {
+        return document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
       });
 
       /** 3. Upload ảnh */
@@ -132,35 +135,46 @@ async function ztteam_processVideoJobOnMuse(job) {
       }
 
       /** 5. Chờ Muse.ai render xong video 15s */
-      console.log(`⏳ [5/5] Đang chờ Muse.ai render video (tối đa 3.5 phút)...`);
+      const timeoutMs = 420000; /** 7 phút tối đa */
+      console.log(`⏳ [5/5] Đang chờ Muse.ai render video (tối đa 7 phút)...`);
       const startTime = Date.now();
-      const timeoutMs = 210000;
       let videoRendered = false;
 
       while (Date.now() - startTime < timeoutMs) {
         await new Promise(r => setTimeout(r, 4000));
         const elapsedSec = Math.round((Date.now() - startTime) / 1000);
 
-        const check = await page.evaluate((initialCount) => {
+        const check = await page.evaluate((initialSrcs, initialBtnCount) => {
           const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
             const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
             return !isAvatar;
           });
 
-          const currentCount = contentVideos.length;
-          const hasNew = currentCount > initialCount;
+          const currentBtnCount = document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
+          const hasNewBtn = currentBtnCount > initialBtnCount;
+
+          /** Kiểm tra xem có video mới có src khác với các video ban đầu */
+          const newVideo = contentVideos.find(v => v.src && !initialSrcs.includes(v.src));
           const lastVideo = contentVideos[contentVideos.length - 1];
-          const isReady = hasNew && lastVideo && lastVideo.duration > 3 && !lastVideo.seeking;
+
+          /** Kiểm tra text thông báo hoàn tất từ trợ lý */
+          const bodyText = document.body.innerText || '';
+          const hasCompletionText = bodyText.includes('Xong video 15s') || bodyText.includes('Đã xuất video 15s');
+
+          /** Điều kiện hoàn tất: Có nút tải mới, hoặc có video src mới, hoặc tin nhắn xong kèm video */
+          const isReady = (hasNewBtn && lastVideo && lastVideo.src) ||
+                          (newVideo && (newVideo.duration > 3 || newVideo.readyState >= 2 || newVideo.src.startsWith('blob:'))) ||
+                          (hasCompletionText && lastVideo && lastVideo.src && !initialSrcs.includes(lastVideo.src));
 
           return {
-            hasNew,
-            isReady,
-            count: currentCount,
-            duration: lastVideo ? lastVideo.duration : 0,
+            isReady: !!isReady,
+            count: contentVideos.length,
+            hasNewBtn,
+            hasNewSrc: !!newVideo,
           };
-        }, initialVideosCount);
+        }, initialVideoSrcs, initialDownloadBtnCount);
 
-        process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | Ready: ${check.isReady ? 'CÓ' : 'Đang chờ...'}`);
+        process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | NewBtn: ${check.hasNewBtn ? 'CÓ' : 'Chưa'} | Ready: ${check.isReady ? 'CÓ' : 'Đang chờ...'}`);
 
         if (check.isReady) {
           console.log(`\n🎉 Muse.ai đã render xong video sau ${elapsedSec} giây!`);
@@ -170,7 +184,7 @@ async function ztteam_processVideoJobOnMuse(job) {
       }
 
       if (!videoRendered) {
-        throw new Error('Quá thời gian chờ render (timeout 3.5 phút)');
+        throw new Error('Quá thời gian chờ render (timeout 7 phút)');
       }
 
       /** Chờ 3s để stream hoàn tất */
@@ -178,13 +192,17 @@ async function ztteam_processVideoJobOnMuse(job) {
 
       /** Trích xuất dữ liệu video blob */
       console.log(`💾 Đang trích xuất dữ liệu video MP4...`);
-      const base64Data = await page.evaluate(async () => {
+      const base64Data = await page.evaluate(async (initialSrcs) => {
         const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
           const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
           return !isAvatar && v.src;
         });
         if (contentVideos.length === 0) return null;
-        const target = contentVideos[contentVideos.length - 1];
+
+        /** Ưu tiên video có src mới, nếu không thì lấy video cuối cùng */
+        const target = contentVideos.find(v => !initialSrcs.includes(v.src)) || contentVideos[contentVideos.length - 1];
+        if (!target || !target.src) return null;
+
         const res = await fetch(target.src);
         const blob = await res.blob();
         return new Promise((resolve) => {
@@ -192,7 +210,7 @@ async function ztteam_processVideoJobOnMuse(job) {
           reader.onloadend = () => resolve(reader.result);
           reader.readAsDataURL(blob);
         });
-      });
+      }, initialVideoSrcs);
 
       if (!base64Data || !base64Data.startsWith('data:')) {
         throw new Error('Không đọc được dữ liệu video stream từ Muse');
