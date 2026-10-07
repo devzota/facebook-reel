@@ -391,11 +391,37 @@ export class ZTTeamImageController {
       }
     }
 
-    const fbPostId = await this.facebookService.ztteam_publishPhoto(
-      image.page.fb_page_id,
-      absoluteImagePath,
-      description
-    );
+    let fbPostId: string;
+    /** ZTTeam: Nếu bài viết đã tạo Video Reel, ưu tiên xuất bản Reel/Video lên Facebook */
+    if (image.video_url) {
+      let absoluteVideoPath = '';
+      if (image.video_url.startsWith('/storage/')) {
+        absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^\/storage\//, ''));
+      } else {
+        absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^[/\\]+/, ''));
+      }
+
+      if (fs.existsSync(absoluteVideoPath)) {
+        const response = await this.facebookService.ztteam_publishReel(
+          image.page.fb_page_id,
+          absoluteVideoPath,
+          description
+        );
+        fbPostId = response.id;
+      } else {
+        fbPostId = await this.facebookService.ztteam_publishPhoto(
+          image.page.fb_page_id,
+          absoluteImagePath,
+          description
+        );
+      }
+    } else {
+      fbPostId = await this.facebookService.ztteam_publishPhoto(
+        image.page.fb_page_id,
+        absoluteImagePath,
+        description
+      );
+    }
 
     /** Quy trinh comment tu dong se duoc publisher.cron xu ly: sau 1 gio dang comment moi va sau 15 phut reply Part 2 + link */
     const updatedImage = await this.prisma.ztteam_images.update({
@@ -565,13 +591,35 @@ export class ZTTeamImageController {
       return { success: true, hasJob: false };
     }
 
-    /** Tạo teaser prompt ngắn gọn, hấp dẫn cho Muse */
-    let snippet = post.wp_post_title;
-    if (post.ai_caption) {
-      const cleanCap = post.ai_caption.replace(/(\.\.\.FULL STORY.*|👉.*)/gi, '').trim();
-      snippet = cleanCap.slice(0, 260);
+    /** ZTTeam: Chuẩn hóa câu chuyện từ caption và tạo prompt chuẩn cho Muse */
+    let storyContent = (post.ai_caption || post.wp_post_title || '').trim();
+
+    /** 1. Loại bỏ các phần đuôi call-to-action */
+    storyContent = storyContent.replace(/\.\.\.FULL STORY IN THE COMMENT.*$/is, '');
+    storyContent = storyContent.replace(/\.\.\.FULL STORY.*$/is, '');
+    storyContent = storyContent.replace(/👉\s*FULL STORY.*$/is, '');
+    storyContent = storyContent.replace(/👉\s*Discover more here:.*$/is, '');
+    storyContent = storyContent.trim();
+
+    /** 2. Loại bỏ dòng title ở đầu bài viết nếu có trùng với tiêu đề */
+    const lines = storyContent.split('\n');
+    const cleanTitle = (post.wp_post_title || '').trim().toLowerCase();
+    if (lines.length > 1) {
+      const firstLine = lines[0].trim().toLowerCase();
+      if (
+        (cleanTitle && (firstLine.includes(cleanTitle.slice(0, 30)) || cleanTitle.includes(firstLine.slice(0, 30)))) ||
+        (firstLine === firstLine.toUpperCase() && firstLine.length > 15)
+      ) {
+        lines.shift();
+        while (lines.length > 0 && lines[0].trim() === '') {
+          lines.shift();
+        }
+        storyContent = lines.join('\n').trim();
+      }
     }
-    const prompt = `Tạo video 15s dựa trên ảnh và nội dung này: ${snippet}`;
+
+    /** 3. Tạo câu lệnh chuẩn theo yêu cầu: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
+    const prompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${storyContent}`;
 
     return {
       success: true,

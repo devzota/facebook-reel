@@ -100,16 +100,36 @@ async function ztteam_processVideoJobOnMuse(job) {
       await fileInput.uploadFile(localImagePath);
       await new Promise(r => setTimeout(r, 3000));
 
-      /** 4. Nhập prompt và gửi */
-      console.log(`✍️ [4/5] Đang nhập câu lệnh: "${job.prompt.slice(0, 80)}..."`);
+      /** 4. Dán prompt (Copy & Paste an toàn không bị Enter gửi sớm) và bấm gửi */
+      console.log(`✍️ [4/5] Đang dán toàn bộ câu lệnh & nội dung câu chuyện...`);
       const textarea = await page.$('textarea');
       if (!textarea) throw new Error('Không tìm thấy ô textarea để nhập prompt');
       await textarea.click();
-      await page.keyboard.type(job.prompt, { delay: 15 });
-      await new Promise(r => setTimeout(r, 1000));
+
+      /** Sử dụng document.execCommand('insertText') để dán toàn bộ nội dung nguyên vẹn mà không bấm phím Enter */
+      await page.evaluate((fullPrompt) => {
+        const ta = document.querySelector('textarea');
+        if (!ta) return;
+        ta.focus();
+        ta.select();
+        document.execCommand('insertText', false, fullPrompt);
+      }, job.prompt);
+      await new Promise(r => setTimeout(r, 1200));
 
       console.log(`🚀 Đang bấm gửi tin nhắn...`);
-      await page.keyboard.press('Enter');
+      /** Bấm nút Gửi nếu có, hoặc nhấn Enter sau khi văn bản đã được dán hoàn tất */
+      const sentViaButton = await page.evaluate(() => {
+        const sendBtn = document.querySelector('button[aria-label="Gửi"], button[type="submit"]:not([aria-label="Đính kèm file"])');
+        if (sendBtn && !sendBtn.disabled) {
+          sendBtn.click();
+          return true;
+        }
+        return false;
+      });
+
+      if (!sentViaButton) {
+        await page.keyboard.press('Enter');
+      }
 
       /** 5. Chờ Muse.ai render xong video 15s */
       console.log(`⏳ [5/5] Đang chờ Muse.ai render video (tối đa 3.5 phút)...`);

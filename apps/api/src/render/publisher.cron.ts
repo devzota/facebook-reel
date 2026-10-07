@@ -394,11 +394,37 @@ export class ZTTeamPublisherCron {
         caption = `${prefix} ${trackingLink}\n\n${caption}`;
       }
 
-      const fbPostId = await this.facebookService.ztteam_publishPhoto(
-        page.fb_page_id,
-        absoluteImagePath,
-        caption
-      );
+      let fbPostId: string;
+      /** ZTTeam: Nếu bài viết đã tạo Video Reel, ưu tiên xuất bản Reel/Video lên Facebook */
+      if (image.video_url) {
+        let absoluteVideoPath = '';
+        if (image.video_url.startsWith('/storage/')) {
+          absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^\/storage\//, ''));
+        } else {
+          absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^[/\\]+/, ''));
+        }
+
+        if (fs.existsSync(absoluteVideoPath)) {
+          const response = await this.facebookService.ztteam_publishReel(
+            page.fb_page_id,
+            absoluteVideoPath,
+            caption
+          );
+          fbPostId = response.id;
+        } else {
+          fbPostId = await this.facebookService.ztteam_publishPhoto(
+            page.fb_page_id,
+            absoluteImagePath,
+            caption
+          );
+        }
+      } else {
+        fbPostId = await this.facebookService.ztteam_publishPhoto(
+          page.fb_page_id,
+          absoluteImagePath,
+          caption
+        );
+      }
 
       await this.prisma.ztteam_images.update({
         where: { id: image.id },
