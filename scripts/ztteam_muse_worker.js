@@ -15,6 +15,8 @@ const API_URL = `${VPS_BASE_URL}/api`;
 const CHROME_DEBUG_URL = process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222';
 const POLL_INTERVAL_MS = 15000; /** 15 giây kiểm tra hàng đợi một lần */
 const TEMP_DIR = path.resolve(__dirname, '../scratch/worker_temp');
+const SUCCESS_COOLDOWN_SEC = 60; /** Nghỉ 60 giây sau khi tạo thành công 1 video */
+const FAILURE_COOLDOWN_SEC = 30; /** Nghỉ 30 giây nếu bài gặp lỗi/từ chối */
 
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -22,6 +24,16 @@ if (!fs.existsSync(TEMP_DIR)) {
 
 /** Biến trạng thái worker */
 let isProcessing = false;
+
+/** Hàm đếm ngược thời gian nghỉ an toàn */
+async function ztteam_cooldown(seconds, reason) {
+  console.log(`\n⏳ [Nghỉ an toàn] ${reason}.`);
+  for (let i = seconds; i > 0; i--) {
+    process.stdout.write(`\r   ⏱️ Đang chờ ${i} giây trước khi tiếp tục...   `);
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  process.stdout.write('\r                                                              \r');
+}
 
 /** Hàm tải file từ URL về máy tính */
 async function ztteam_downloadFile(url, destPath) {
@@ -275,6 +287,9 @@ async function ztteam_processVideoJobOnMuse(job) {
     console.log(`🎉 HOÀN TẤT THÀNH CÔNG JOB #${job.id}!`);
     console.log(`📹 Video URL trên VPS: ${uploadRes.data.videoUrl}`);
     console.log(`========================================================\n`);
+
+    /** Nghỉ an toàn sau khi tạo thành công */
+    await ztteam_cooldown(SUCCESS_COOLDOWN_SEC, 'Đã tạo video thành công');
   } catch (err) {
     console.error(`\n❌ LỖI KHI XỬ LÝ JOB #${job.id}:`, err.message);
 
@@ -285,6 +300,9 @@ async function ztteam_processVideoJobOnMuse(job) {
     } catch (apiErr) {
       console.error(`Không thể báo lỗi lên VPS:`, apiErr.message);
     }
+
+    /** Nghỉ an toàn sau khi gặp lỗi */
+    await ztteam_cooldown(FAILURE_COOLDOWN_SEC, 'Gặp lỗi trong quá trình tạo video');
   } finally {
     /** Dọn dẹp file tạm */
     if (fs.existsSync(localImagePath)) fs.unlinkSync(localImagePath);

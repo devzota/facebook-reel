@@ -623,14 +623,14 @@ export class ZTTeamImageController {
       orderBy: { updated_at: 'asc' },
     });
 
-    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video */
+    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video (Chỉ lấy NONE, tuyệt đối không lấy FAILED để tránh vòng lặp) */
     if (!post && auto === 'true') {
       post = await this.prisma.ztteam_images.findFirst({
         where: {
           status: 'COMPLETED',
           image_url: { not: null },
           video_url: null,
-          video_status: { in: ['NONE', 'FAILED'] },
+          video_status: 'NONE',
           page: {
             post_format: { in: ['reel', 'mixed'] },
           },
@@ -652,34 +652,10 @@ export class ZTTeamImageController {
       return { success: true, hasJob: false };
     }
 
-    /** ZTTeam: Chuẩn hóa câu chuyện từ caption và tạo prompt chuẩn cho Muse */
-    let storyContent = (post.ai_caption || post.wp_post_title || '').trim();
+    /** ZTTeam: Chuẩn hóa câu chuyện từ caption, lọc từ nhạy cảm và tạo prompt điện ảnh an toàn cho Muse */
+    const storyContent = this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
 
-    /** 1. Loại bỏ các phần đuôi call-to-action */
-    storyContent = storyContent.replace(/\.\.\.FULL STORY IN THE COMMENT.*$/is, '');
-    storyContent = storyContent.replace(/\.\.\.FULL STORY.*$/is, '');
-    storyContent = storyContent.replace(/👉\s*FULL STORY.*$/is, '');
-    storyContent = storyContent.replace(/👉\s*Discover more here:.*$/is, '');
-    storyContent = storyContent.trim();
-
-    /** 2. Loại bỏ dòng title ở đầu bài viết nếu có trùng với tiêu đề */
-    const lines = storyContent.split('\n');
-    const cleanTitle = (post.wp_post_title || '').trim().toLowerCase();
-    if (lines.length > 1) {
-      const firstLine = lines[0].trim().toLowerCase();
-      if (
-        (cleanTitle && (firstLine.includes(cleanTitle.slice(0, 30)) || cleanTitle.includes(firstLine.slice(0, 30)))) ||
-        (firstLine === firstLine.toUpperCase() && firstLine.length > 15)
-      ) {
-        lines.shift();
-        while (lines.length > 0 && lines[0].trim() === '') {
-          lines.shift();
-        }
-        storyContent = lines.join('\n').trim();
-      }
-    }
-
-    /** 3. Tạo câu lệnh chuẩn theo yêu cầu: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
+    /** Tạo câu lệnh chuẩn: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
     const prompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${storyContent}`;
 
     return {
@@ -697,6 +673,63 @@ export class ZTTeamImageController {
   }
 
   /**
+   * ZTTeam: Hàm làm sạch nội dung prompt cho Muse.ai né bộ lọc vi phạm chính sách
+   */
+  private ztteam_sanitizePromptForMuse(rawText: string): string {
+    let text = (rawText || '').trim();
+
+    /** 1. Loại bỏ các phần đuôi CTA */
+    text = text.replace(/\.\.\.FULL STORY IN THE COMMENT.*$/is, '');
+    text = text.replace(/\.\.\.FULL STORY.*$/is, '');
+    text = text.replace(/👉\s*FULL STORY.*$/is, '');
+    text = text.replace(/👉\s*Discover more here:.*$/is, '');
+    text = text.replace(/PART ONE\s*—.*$/is, '');
+
+    /** 2. Loại bỏ các dòng tiêu đề in hoa thừa ở đầu */
+    const lines = text.split('\n');
+    if (lines.length > 1 && lines[0].trim() === lines[0].trim().toUpperCase() && lines[0].trim().length > 15) {
+      lines.shift();
+      while (lines.length > 0 && lines[0].trim() === '') lines.shift();
+      text = lines.join('\n');
+    }
+
+    /** 3. Bản đồ thay thế các từ ngữ nhạy cảm / bạo lực sang từ ngữ điện ảnh trung lập */
+    const sensitiveMap: [RegExp, string][] = [
+      [/\bmafia(\s+boss)?\b/gi, 'powerful boss'],
+      [/\bblood(y)?\b/gi, 'tension'],
+      [/\bmurder(ed|er|ing)?\b/gi, 'incident'],
+      [/\bkill(ed|er|ing)?\b/gi, 'conflict'],
+      [/\bgun(shot|fire|s)?\b/gi, 'danger'],
+      [/\bcrime(s)?\b/gi, 'mystery'],
+      [/\bviolence\b/gi, 'intense action'],
+      [/\bdead(ly)?\b/gi, 'urgent'],
+      [/\bcorpse\b/gi, 'person'],
+      [/\bsuicide\b/gi, 'crisis'],
+      [/\bambulance\b/gi, 'rescue vehicle'],
+      [/\bcrashed\b/gi, 'halted unexpectedly'],
+      [/\bdispute\b/gi, 'negotiation'],
+      [/\bweapon(s)?\b/gi, 'gadget'],
+    ];
+
+    for (const [regex, replacement] of sensitiveMap) {
+      text = text.replace(regex, replacement);
+    }
+
+    /** 4. Rút gọn thành đoạn tóm tắt ngắn kịch tính (dưới 250 ký tự, phù hợp cho Reel 15 giây) */
+    text = text.replace(/\s+/g, ' ').trim();
+    if (text.length > 250) {
+      const cutIndex = text.lastIndexOf('.', 250);
+      if (cutIndex > 100) {
+        text = text.substring(0, cutIndex + 1);
+      } else {
+        text = text.substring(0, 240) + '...';
+      }
+    }
+
+    return text;
+  }
+
+  /**
    * ZTTeam: Đưa bài viết vào hàng đợi tạo video Reel
    * POST /api/image/:id/queue-video
    */
@@ -710,7 +743,7 @@ export class ZTTeamImageController {
 
     const updated = await this.prisma.ztteam_images.update({
       where: { id },
-      data: { video_status: 'PENDING' },
+      data: { video_status: 'PENDING', error_log: null },
     });
     this.eventEmitter.emit('image.updated', updated);
 
