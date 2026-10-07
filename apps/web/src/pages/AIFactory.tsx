@@ -93,11 +93,11 @@ export default function AIFactory() {
     const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id;
     if (!id) return;
     try {
-      await api.post(`image/retry/${id}`);
-      ztteam_showToast('Đã thêm lại vào hàng đợi tạo ảnh', 'success');
+      const res = await api.post(`image/retry/${id}`);
+      ztteam_showToast(res.data?.message || 'Đã làm mới lại khung giờ xuất bản', 'success');
       ztteam_loadItems();
     } catch (error: any) {
-      ztteam_showToast(error.response?.data?.message || 'Lỗi retry', 'error');
+      ztteam_showToast(error.response?.data?.message || 'Lỗi làm mới', 'error');
     }
   };
 

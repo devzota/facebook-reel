@@ -307,11 +307,11 @@ export default function FacebookPageSettings() {
     }
   };
 
-  /** Retry Item */
+  /** Retry Item / Làm mới khung giờ xuất bản */
   const ztteam_retryQueueItem = async (item: any) => {
     try {
-      await api.post(`image/retry/${item.id}`);
-      ztteam_showToast('Đã thêm lại vào hàng đợi', 'success');
+      const res = await api.post(`image/retry/${item.id}`);
+      ztteam_showToast(res.data?.message || 'Đã làm mới lại khung giờ xuất bản (giữ nguyên ảnh)', 'success');
       ztteam_loadQueue();
     } catch (error: any) {
       ztteam_showToast(error.response?.data?.message || 'Lỗi thử lại', 'error');

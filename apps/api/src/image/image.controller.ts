@@ -352,16 +352,65 @@ export class ZTTeamImageController {
     return { success: true };
   }
 
+  /**
+   * ZTTeam: Thử lại bài viết ảnh
+   * - Nếu đã có file ảnh (image_url) và không có cờ force: Chỉ làm mới khung giờ xuất bản (status = COMPLETED), giữ nguyên ảnh, không gọi SangTao.ai vẽ lại.
+   * - Nếu chưa có file ảnh hoặc truyền ?force=true: Vẽ lại ảnh mới bằng AI.
+   */
   @Post('retry/:id')
   @UseGuards(ZTTeamAuthGuard)
-  async ztteam_retryImage(@Param('id') id: string) {
+  async ztteam_retryImage(@Param('id') id: string, @Query('force') force?: string) {
     const image = await this.prisma.ztteam_images.findUnique({ where: { id } });
     if (!image) throw new Error('Image not found');
 
-    await this.prisma.ztteam_images.update({
+    const shouldForceRecreate = force === 'true' || force === '1';
+
+    /** Kiểm tra xem ảnh đã có sẵn file ảnh hợp lệ trên đĩa hay chưa */
+    let hasExistingImageFile = false;
+    if (image.image_url) {
+      const absoluteImagePath = ztteam_getImagesPath(image.id, 'output.png');
+      if (fs.existsSync(absoluteImagePath)) {
+        hasExistingImageFile = true;
+      } else {
+        let fallback = '';
+        if (image.image_url.startsWith('/storage') || image.image_url.startsWith('storage')) {
+          fallback = path.join(ztteam_getStorageRoot(), image.image_url.replace(/^\/?storage[/\\]?/, ''));
+        } else if (fs.existsSync(image.image_url)) {
+          fallback = image.image_url;
+        } else {
+          fallback = path.join(ztteam_getStorageRoot(), image.image_url.replace(/^[/\\]+/, ''));
+        }
+        if (fallback && fs.existsSync(fallback)) {
+          hasExistingImageFile = true;
+        }
+      }
+    }
+
+    /** Nếu đã có file ảnh và không ép buộc tạo lại ảnh: CHỈ LÀM MỚI KHUNG GIỜ VÀ ĐẶT LẠI TRẠNG THÁI COMPLETED */
+    if (hasExistingImageFile && !shouldForceRecreate) {
+      const updated = await this.prisma.ztteam_images.update({
+        where: { id },
+        data: {
+          status: 'COMPLETED',
+          error_log: null,
+          post_retry_count: 0,
+        }
+      });
+      this.eventEmitter.emit('image.updated', updated);
+      return {
+        success: true,
+        message: 'Đã làm mới lại khung giờ xuất bản (giữ nguyên ảnh)',
+        mode: 'rescheduled',
+        image: updated,
+      };
+    }
+
+    /** Nếu chưa có ảnh hoặc yêu cầu ép vẽ lại ảnh mới: Mới đẩy vào worker AI */
+    const updated = await this.prisma.ztteam_images.update({
       where: { id },
       data: { status: 'QUEUED', error_log: null, post_retry_count: 0 }
     });
+    this.eventEmitter.emit('image.updated', updated);
 
     const jobId = await this.imageProcessor.ztteam_addJob({
       imageId: image.id,
@@ -370,7 +419,12 @@ export class ZTTeamImageController {
       templateId: image.template_id,
     });
 
-    return { success: true, jobId };
+    return {
+      success: true,
+      jobId,
+      message: 'Đã thêm vào hàng đợi vẽ lại ảnh mới bằng AI',
+      mode: 'regenerated',
+    };
   }
 
   @Delete(':id')

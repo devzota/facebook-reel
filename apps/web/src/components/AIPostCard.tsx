@@ -33,7 +33,9 @@ export default function ZTTeamAIPostCard({
   const isCompleted = item.status === 'COMPLETED';
   const isPosted = item.is_posted || item.status === 'POSTED';
   const isFailed = item.status === 'FAILED';
-  const canPostNow = isCompleted && !isPosted;
+  const hasImage = Boolean(item.image_url);
+  /** ZTTeam: Cho phép Đăng Ngay thủ công bất cứ lúc nào đã có ảnh và chưa đăng Facebook thành công (kể cả khi vừa bị lỗi đăng) */
+  const canPostNow = hasImage && !isPosted && !isRendering;
   const isAlreadyPosted = isPosted;
 
   const resolvedPageName = pageName || item.page?.name || 'Fanpage Facebook';
@@ -88,7 +90,7 @@ export default function ZTTeamAIPostCard({
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
             <span className="material-symbols-outlined text-[13px]">error</span>
-            Lỗi
+            {hasImage ? 'Lỗi đăng FB' : 'Lỗi tạo ảnh'}
           </span>
         );
       default:
@@ -223,7 +225,7 @@ export default function ZTTeamAIPostCard({
               </div>
               <p className="text-xs text-cyan-300 font-bold">Đang khởi tạo ảnh 2K AI...</p>
             </div>
-          ) : isFailed ? (
+          ) : isFailed && !hasImage ? (
             <div className="absolute inset-0 bg-rose-950/70 flex flex-col items-center justify-center p-4 text-center space-y-2 text-rose-300">
               <span className="material-symbols-outlined text-3xl text-rose-400">warning</span>
               <span className="text-xs font-bold">Khởi tạo ảnh thất bại</span>
@@ -265,6 +267,13 @@ export default function ZTTeamAIPostCard({
                     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
                 }}
               />
+              {/** ZTTeam: Nếu bị lỗi đăng Facebook nhưng ảnh đã có: Hiển thị banner cảnh báo dưới chân ảnh */}
+              {isFailed && (
+                <div className="absolute inset-x-0 bottom-0 bg-rose-950/90 backdrop-blur-sm p-2 text-rose-200 text-[10px] flex items-center gap-1.5 shadow-md">
+                  <span className="material-symbols-outlined text-sm text-rose-400 shrink-0">error</span>
+                  <span className="truncate flex-1 font-medium">{item.error_log || 'Lỗi xuất bản Facebook'}</span>
+                </div>
+              )}
               <div className="absolute inset-0 bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover/media:opacity-100">
                 <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center">
                   <span className="material-symbols-outlined text-xl">zoom_in</span>
@@ -457,9 +466,9 @@ export default function ZTTeamAIPostCard({
               type="button"
               onClick={() => onRetry(item)}
               className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-amber-500/20 text-fb-text-muted hover:text-amber-300 transition-all flex items-center justify-center border border-white/5 cursor-pointer"
-              title="Thử lại / Render lại"
+              title={hasImage ? "Làm mới lại khung giờ xuất bản (giữ nguyên ảnh)" : "Tạo lại ảnh bằng AI"}
             >
-              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span className="material-symbols-outlined text-[16px]">schedule</span>
             </button>
           )}
 

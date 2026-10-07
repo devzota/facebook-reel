@@ -65,8 +65,8 @@ export default function ImageFactory() {
 
   const ztteam_retryImage = async (id: string) => {
     try {
-      await api.post(`image/retry/${id}`);
-      ztteam_showToast('Đã thêm lại vào hàng đợi tạo ảnh', 'success');
+      const res = await api.post(`image/retry/${id}`);
+      ztteam_showToast(res.data?.message || 'Đã làm mới lại khung giờ xuất bản', 'success');
       ztteam_loadImages();
     } catch (error: any) {
       ztteam_showToast(error.response?.data?.message || 'Lỗi thử lại', 'error');
