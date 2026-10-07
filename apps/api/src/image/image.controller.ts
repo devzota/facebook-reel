@@ -79,40 +79,116 @@ export class ZTTeamImageController {
   @UseGuards(ZTTeamAuthGuard)
   async ztteam_listImages(
     @Request() req: any,
-    @Query('fbPageId') fbPageId: string,
+    @Query('fbPageId') fbPageId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
     @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
+    @Query('limit') limit: string = '24',
   ) {
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    let where: any = {};
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 24);
+    const skip = (pageNum - 1) * limitNum;
+
+    /** Base where theo User sở hữu Fanpage */
+    const baseWhere: any = {
+      page: {
+        fb_account: {
+          owner_user_id: req.user.sub,
+        },
+      },
+    };
+
     if (fbPageId) {
       const p = await this.prisma.ztteam_pages.findFirst({
-        where: { fb_page_id: fbPageId }
+        where: {
+          OR: [
+            { fb_page_id: fbPageId },
+            { id: fbPageId },
+          ],
+        },
       });
       if (!p) {
-        return { data: [], total: 0 };
+        return {
+          data: [],
+          total: 0,
+          counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0 },
+        };
       }
-      where.page_id = p.id;
+      baseWhere.page_id = p.id;
     }
 
-    /** Lọc dữ liệu theo User đang đăng nhập */
-    where.page = {
-      ...where.page,
-      fb_account: {
-        owner_user_id: req.user.sub
+    /** Điều kiện where cho danh sách hiển thị */
+    const where: any = { ...baseWhere };
+
+    /** Lọc từ khóa tìm kiếm (Tiêu đề, URL hoặc Caption) */
+    if (search && search.trim()) {
+      const kw = search.trim();
+      where.OR = [
+        { wp_post_title: { contains: kw, mode: 'insensitive' } },
+        { wp_post_url: { contains: kw, mode: 'insensitive' } },
+        { ai_caption: { contains: kw, mode: 'insensitive' } },
+      ];
+    }
+
+    /** Lọc trạng thái chính xác */
+    if (status) {
+      const s = status.toUpperCase();
+      if (s === 'POSTED') {
+        const postedCondition = [{ is_posted: true }, { status: 'POSTED' }];
+        if (where.OR) {
+          where.AND = [{ OR: where.OR }, { OR: postedCondition }];
+          delete where.OR;
+        } else {
+          where.OR = postedCondition;
+        }
+      } else if (s === 'COMPLETED') {
+        where.status = 'COMPLETED';
+        where.is_posted = false;
+      } else if (s === 'QUEUED') {
+        where.status = 'QUEUED';
+        where.is_posted = false;
+      } else if (s === 'RENDERING' || s === 'PROCESSING') {
+        where.status = { in: ['RENDERING', 'PROCESSING'] };
+        where.is_posted = false;
+      } else if (s === 'FAILED') {
+        where.status = 'FAILED';
       }
-    };
-    
-    const [images, total] = await Promise.all([
+    }
+
+    /** Đếm song song số lượng bài theo từng trạng thái để hiển thị Tabs */
+    const [
+      images,
+      total,
+      countAll,
+      countQueued,
+      countRendering,
+      countCompleted,
+      countPosted,
+      countFailed,
+    ] = await Promise.all([
       this.prisma.ztteam_images.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip,
-        take: parseInt(limit),
-        include: { page: true }
+        take: limitNum,
+        include: { page: true },
+      }),
+      this.prisma.ztteam_images.count({ where }),
+      this.prisma.ztteam_images.count({ where: baseWhere }),
+      this.prisma.ztteam_images.count({
+        where: { ...baseWhere, status: 'QUEUED', is_posted: false },
       }),
       this.prisma.ztteam_images.count({
-        where,
+        where: { ...baseWhere, status: { in: ['RENDERING', 'PROCESSING'] }, is_posted: false },
+      }),
+      this.prisma.ztteam_images.count({
+        where: { ...baseWhere, status: 'COMPLETED', is_posted: false },
+      }),
+      this.prisma.ztteam_images.count({
+        where: { ...baseWhere, OR: [{ is_posted: true }, { status: 'POSTED' }] },
+      }),
+      this.prisma.ztteam_images.count({
+        where: { ...baseWhere, status: 'FAILED' },
       }),
     ]);
 
@@ -236,7 +312,18 @@ export class ZTTeamImageController {
       };
     });
 
-    return { data: imagesWithDetails, total };
+    return {
+      data: imagesWithDetails,
+      total,
+      counts: {
+        total: countAll,
+        queued: countQueued,
+        rendering: countRendering,
+        completed: countCompleted,
+        posted: countPosted,
+        failed: countFailed,
+      },
+    };
   }
 
   @Post(':id/post-to-fb')

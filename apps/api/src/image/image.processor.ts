@@ -334,16 +334,130 @@ export class ZTTeamImageProcessor implements OnModuleInit {
 
     /** 5. Update database record */
     const localUrl = `/storage/images/${imageId}/output.png`;
+
+    /** ZTTeam: Kiểm tra xem bài viết đã có Caption và Comment chuẩn hay chưa */
+    const isCurrentCaptionValid = Boolean(
+      image.ai_caption &&
+      !image.ai_caption.includes('Stay tuned for the full story') &&
+      !image.ai_caption.includes('What happens next will change everything')
+    );
+
+    const isCurrentCommentValid = Boolean(
+      image.ai_first_comment &&
+      !image.ai_first_comment.includes('yourwebsite.com')
+    );
+
+    let finalCaption = image.ai_caption;
+    let finalComment = image.ai_first_comment;
+
+    /** ZTTeam: Nếu caption hoặc comment chưa chuẩn, tự động trích xuất định dạng Facebook Viral từ WordPress */
+    if (!isCurrentCaptionValid || !isCurrentCommentValid) {
+      const storyTitle = wpPostData?.title?.rendered || image.wp_post_title || '';
+      const titleUppercase = storyTitle.toUpperCase();
+      let rawContent = '';
+      if (wpPostData?.content?.rendered) {
+        rawContent = wpPostData.content.rendered.replace(/<[^>]+>/g, ' ').trim();
+      } else {
+        rawContent = storyContent;
+      }
+
+      const { part1, part2 } = this.ztteam_extractStoryParts(rawContent, 900, 700);
+      const postUrl = wpPostData?.link || image.wp_post_url || '';
+
+      if (!isCurrentCaptionValid) {
+        const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+        finalCaption = part1 ? `${titleUppercase}\n\n${part1}\n\n${captionCTA}` : `${titleUppercase}\n\n${captionCTA}`;
+      }
+
+      if (!isCurrentCommentValid) {
+        const commentCTA = postUrl ? `👉 FULL STORY HERE 👇👇👇\n${postUrl}` : '👉 FULL STORY IN THE LINK';
+        finalComment = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
+      }
+    }
+
     await this.ztteam_updateImage(imageId, {
       status: 'COMPLETED',
       image_url: localUrl,
       template_id: 'sangtao_2k',
-      ai_caption: promptData.caption_en || image.ai_caption,
-      ai_first_comment: promptData.first_comment || image.ai_first_comment,
+      ai_caption: finalCaption,
+      ai_first_comment: finalComment,
       error_log: null,
     });
 
     this.logger.log(`===== SANGTAO 2K RENDER COMPLETE: image=${imageId}, local=${localUrl}, wp=${uploadedMediaUrl || 'N/A'} =====`);
+  }
+
+  /**
+   * ZTTeam: Trích xuất Part 1 và Part 2 chuẩn Facebook Viral
+   */
+  private ztteam_extractStoryParts(
+    content: string,
+    maxPart1Chars: number = 900,
+    maxPart2Chars: number = 700
+  ): { part1: string; part2: string } {
+    if (!content) return { part1: '', part2: '' };
+
+    let cleaned = content.replace(/^Part\s*1\s*[:\-]\s*/i, '').trim();
+
+    /** Trường hợp bài viết có đánh dấu Part 1 và Part 2 rõ ràng */
+    const part2Regex = /Part\s*2\s*[:\-]/i;
+    const part2Match = cleaned.match(part2Regex);
+
+    if (part2Match && part2Match.index && part2Match.index > 100) {
+      let part1 = cleaned.substring(0, part2Match.index).trim();
+      let remainder = cleaned.substring(part2Match.index).trim();
+
+      remainder = remainder.replace(/^Part\s*2\s*[:\-]\s*/i, '').trim();
+
+      const part3Match = remainder.match(/Part\s*3\s*[:\-]/i);
+      let part2Raw = part3Match && part3Match.index ? remainder.substring(0, part3Match.index).trim() : remainder;
+
+      let part2 = part2Raw;
+      if (part2.length > maxPart2Chars) {
+        const slice = part2.substring(0, maxPart2Chars);
+        const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+        if (lastPeriod > 150) {
+          part2 = slice.substring(0, lastPeriod + 1).trim();
+        } else {
+          part2 = slice.trim() + '...';
+        }
+      }
+
+      return { part1, part2 };
+    }
+
+    /** Trường hợp câu chuyện liền mạch không có chữ Part 1, Part 2 */
+    let part1 = cleaned;
+    let remainder = '';
+
+    if (cleaned.length > maxPart1Chars) {
+      const slice = cleaned.substring(0, maxPart1Chars);
+      const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+      if (lastPeriod > 200) {
+        part1 = slice.substring(0, lastPeriod + 1).trim();
+        remainder = cleaned.substring(lastPeriod + 1).trim();
+      } else {
+        part1 = slice.trim();
+        remainder = cleaned.substring(maxPart1Chars).trim();
+      }
+    }
+
+    let part2 = '';
+    if (remainder) {
+      if (remainder.length > maxPart2Chars) {
+        const slice = remainder.substring(0, maxPart2Chars);
+        const lastPeriod = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'));
+        if (lastPeriod > 150) {
+          part2 = slice.substring(0, lastPeriod + 1).trim();
+        } else {
+          part2 = slice.trim() + '...';
+        }
+      } else {
+        part2 = remainder;
+      }
+    }
+
+    return { part1, part2 };
   }
 
   private async ztteam_step1_fetchData(pageId: string, wpPostId: string, templateId: string) {
