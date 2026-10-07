@@ -95,6 +95,9 @@ async function ztteam_processVideoJobOnMuse(job) {
       const initialDownloadBtnCount = await page.evaluate(() => {
         return document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
       });
+      const initialProseCount = await page.evaluate(() => {
+        return document.querySelectorAll('.prose').length;
+      });
 
       /** 3. Upload ảnh */
       console.log(`📤 [3/5] Đang đính kèm ảnh vào khung chat Muse.ai...`);
@@ -144,7 +147,29 @@ async function ztteam_processVideoJobOnMuse(job) {
         await new Promise(r => setTimeout(r, 4000));
         const elapsedSec = Math.round((Date.now() - startTime) / 1000);
 
-        const check = await page.evaluate((initialSrcs, initialBtnCount) => {
+        const check = await page.evaluate((initialSrcs, initialBtnCount, initialProses) => {
+          /** Kiểm tra nếu có phản hồi từ chối / lỗi từ bot Muse */
+          const currentProses = Array.from(document.querySelectorAll('.prose'));
+          const newProses = currentProses.slice(initialProses);
+          let refusalError = null;
+          const refusalKeywords = [
+            'không tạo được video',
+            'gửi ảnh khác nhé',
+            'không thể tạo video',
+            'vi phạm chính sách',
+            'nội dung này không phù hợp',
+            'thử lại với ảnh khác',
+            'lỗi tạo video'
+          ];
+          for (const prose of newProses) {
+            const txt = (prose.innerText || '').toLowerCase();
+            const matched = refusalKeywords.find(kw => txt.includes(kw));
+            if (matched) {
+              refusalError = prose.innerText.trim();
+              break;
+            }
+          }
+
           const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
             const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
             return !isAvatar;
@@ -171,8 +196,14 @@ async function ztteam_processVideoJobOnMuse(job) {
             count: contentVideos.length,
             hasNewBtn,
             hasNewSrc: !!newVideo,
+            refusalError,
           };
-        }, initialVideoSrcs, initialDownloadBtnCount);
+        }, initialVideoSrcs, initialDownloadBtnCount, initialProseCount);
+
+        if (check.refusalError) {
+          console.log(`\n❌ Muse.ai từ chối: "${check.refusalError}"`);
+          throw new Error(`Muse.ai từ chối: ${check.refusalError}`);
+        }
 
         process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | NewBtn: ${check.hasNewBtn ? 'CÓ' : 'Chưa'} | Ready: ${check.isReady ? 'CÓ' : 'Đang chờ...'}`);
 

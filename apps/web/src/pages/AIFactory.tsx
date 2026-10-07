@@ -7,7 +7,7 @@ import ZTTeamAIPostCard from '../components/AIPostCard';
 
 /**
  * ZTTeam AIFactory Component
- * Quản lý hàng đợi bài viết & ảnh 2K SangTao.ai chuẩn Facebook Feed
+ * Quản lý hàng đợi bài viết & ảnh 2K AI chuẩn Facebook Feed
  * Tối ưu bộ lọc Tabs trạng thái, tìm kiếm từ khóa, phân trang và đếm số lượng thời gian thực
  */
 export default function AIFactory() {
@@ -191,6 +191,19 @@ export default function AIFactory() {
     }
   };
 
+  /** Lấy ảnh gốc từ website làm chuẩn để tạo Video Reel */
+  const ztteam_useOriginalImage = async (itemOrId: any) => {
+    const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id;
+    if (!id) return;
+    try {
+      const res = await api.post(`image/${id}/use-original-image`);
+      ztteam_showToast(res.data?.message || 'Đã lấy ảnh gốc thành công và đưa vào hàng đợi tạo Video Reel', 'success');
+      ztteam_loadItems(true);
+    } catch (error: any) {
+      ztteam_showToast(error.response?.data?.message || 'Lỗi lấy ảnh gốc', 'error');
+    }
+  };
+
   /** Đặt lại toàn bộ bộ lọc */
   const ztteam_resetFilters = () => {
     setFilterStatus('');
@@ -225,7 +238,7 @@ export default function AIFactory() {
             AI Factory
           </h2>
           <p className="text-sm font-medium text-fb-text-muted mt-1">
-            Quản lý và giám sát hàng đợi bài viết & ảnh 2K SangTao.ai tự động xuất bản lên Fanpage Facebook.
+            Quản lý và giám sát hàng đợi bài viết & ảnh 2K AI tự động xuất bản lên Fanpage Facebook.
           </p>
         </div>
 
@@ -409,6 +422,7 @@ export default function AIFactory() {
                   onRetry={ztteam_retryItem}
                   onDelete={ztteam_deleteItem}
                   onQueueVideo={ztteam_queueVideoReel}
+                  onUseOriginalImage={ztteam_useOriginalImage}
                 />
               ))}
             </div>

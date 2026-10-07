@@ -311,7 +311,7 @@ export default function ImageFactory() {
                     {isRendering ? (
                       <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-cyan-400">
                         <span className="material-symbols-outlined text-4xl animate-spin">progress_activity</span>
-                        <p className="text-xs font-bold text-white">Đang xử lý tạo ảnh SangTao.ai...</p>
+                        <p className="text-xs font-bold text-white">Đang xử lý tạo ảnh AI...</p>
                         <span className="text-[10px] text-cyan-300/80 bg-black/40 px-3 py-1 rounded-full">Chất lượng cao 2048px</span>
                       </div>
                     ) : isFailed ? (
@@ -336,7 +336,7 @@ export default function ImageFactory() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
                         <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-cyan-400 border border-white/10 tracking-wider">
-                          ẢNH 2K SANGTAO.AI
+                          ẢNH 2K AI
                         </div>
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity bg-black/30">
                           <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-fb-blue to-cyan-500 text-white flex items-center justify-center shadow-xl shadow-cyan-500/30 scale-95 group-hover/media:scale-105 transition-transform">

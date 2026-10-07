@@ -167,43 +167,58 @@ export class ZTTeamPublisherCron {
           continue;
         }
 
-        /** 5. Chọn định dạng bài đăng (Reel / Ảnh) phù hợp với cấu hình Page */
-        const pagePendingReels = pendingReels.filter(r => r.page_id === pageId);
-        const pagePendingImages = pendingImages.filter(i => i.page_id === pageId);
+        /** 5. Phân loại bài đăng Video Reel và Ảnh cho Page này */
+        const pageReelsOld = pendingReels.filter(r => r.page_id === pageId);
+        const pageImagesWithVideo = pendingImages.filter(i => i.page_id === pageId && i.video_url);
+        const pageImagesOnly = pendingImages.filter(i => i.page_id === pageId && !i.video_url);
 
-        let chosenType: 'reel' | 'image' | null = null;
+        /** Tập hợp tất cả các ứng viên Reel */
+        const allAvailableReels = [
+          ...pageReelsOld.map(r => ({ type: 'reel_legacy' as const, data: r })),
+          ...pageImagesWithVideo.map(i => ({ type: 'image_reel' as const, data: i })),
+        ];
 
-        if (post_format === 'image') {
-          if (pagePendingImages.length > 0) chosenType = 'image';
-        } else if (post_format === 'mixed') {
-          if (lastPostType === 'reel') {
-            if (pagePendingImages.length > 0) {
-              chosenType = 'image';
-            } else if (pagePendingReels.length > 0) {
-              chosenType = 'reel';
-            }
-          } else {
-            if (pagePendingReels.length > 0) {
-              chosenType = 'reel';
-            } else if (pagePendingImages.length > 0) {
-              chosenType = 'image';
-            }
+        /** Tập hợp tất cả các ứng viên Ảnh */
+        const allAvailableImages = pageImagesOnly.map(i => ({ type: 'image_only' as const, data: i }));
+
+        let selectedItem: { type: 'reel_legacy' | 'image_reel' | 'image_only'; data: any } | null = null;
+
+        if (post_format === 'reel') {
+          /** Cấu hình: CHỈ ĐĂNG VIDEO REEL - Tuyệt đối không fallback sang ảnh nếu chưa có video */
+          if (allAvailableReels.length > 0) {
+            selectedItem = allAvailableReels[0];
+          }
+        } else if (post_format === 'image') {
+          /** Cấu hình: CHỈ ĐĂNG ẢNH */
+          if (allAvailableImages.length > 0) {
+            selectedItem = allAvailableImages[0];
+          } else if (pageImagesWithVideo.length > 0) {
+            selectedItem = { type: 'image_only', data: pageImagesWithVideo[0] };
           }
         } else {
-          /** default 'reel' */
-          if (pagePendingReels.length > 0) {
-            chosenType = 'reel';
-          } else if (pagePendingImages.length > 0) {
-            /** Fallback to image if no reels are pending */
-            chosenType = 'image';
+          /** Cấu hình: MIXED (Luân phiên Reel và Ảnh) */
+          if (lastPostType === 'reel') {
+            if (allAvailableImages.length > 0) {
+              selectedItem = allAvailableImages[0];
+            } else if (allAvailableReels.length > 0) {
+              selectedItem = allAvailableReels[0];
+            }
+          } else {
+            if (allAvailableReels.length > 0) {
+              selectedItem = allAvailableReels[0];
+            } else if (allAvailableImages.length > 0) {
+              selectedItem = allAvailableImages[0];
+            }
           }
         }
 
         /** 6. Tiến hành đăng bài duy nhất cho Page này */
-        if (chosenType === 'reel' && pagePendingReels.length > 0) {
-          await this.ztteam_publishReel(pagePendingReels[0], page);
-        } else if (chosenType === 'image' && pagePendingImages.length > 0) {
-          await this.ztteam_publishImage(pagePendingImages[0], page);
+        if (selectedItem) {
+          if (selectedItem.type === 'reel_legacy') {
+            await this.ztteam_publishReel(selectedItem.data, page);
+          } else {
+            await this.ztteam_publishImage(selectedItem.data, page);
+          }
         }
       }
     } catch (error: any) {

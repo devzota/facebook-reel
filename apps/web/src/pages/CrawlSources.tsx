@@ -264,7 +264,7 @@ export default function WordPressSites() {
     setAutoStepText('1/4: Đang cào sạch câu chuyện & vượt tường lửa Cloudflare...');
 
     const timer1 = setTimeout(() => {
-      setAutoStepText('2/4: AI đang phân tích bối cảnh & vẽ ảnh 2K bằng SangTao.ai...');
+      setAutoStepText('2/4: AI đang phân tích bối cảnh & vẽ ảnh 2K...');
     }, 4000);
 
     const timer2 = setTimeout(() => {
@@ -933,7 +933,7 @@ export default function WordPressSites() {
                       <div className="relative rounded-2xl overflow-hidden shadow-lg border border-white/10 group">
                         <img src={autoResult.image2kUrl} alt="2K Scene" className="w-full aspect-[4/5] object-cover" />
                         <div className="absolute top-2 left-2 bg-slate-950/70 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-emerald-400 tracking-wider">
-                          ẢNH 2K SANGTAO.AI
+                          ẢNH 2K AI
                         </div>
                         <a
                           href={autoResult.image2kUrl}
@@ -1084,7 +1084,7 @@ export default function WordPressSites() {
                       <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
                       <div>
                         <p className="text-xs font-extrabold text-emerald-400">{autoStepText || 'Đang thực hiện quy trình tự động...'}</p>
-                        <p className="text-[10px] text-fb-text-muted mt-0.5">Vui lòng chờ giây lát: Hệ thống đang cào dữ liệu, gọi SangTao.ai tạo ảnh 2K và đăng lên hệ thống.</p>
+                        <p className="text-[10px] text-fb-text-muted mt-0.5">Vui lòng chờ giây lát: Hệ thống đang cào dữ liệu, tạo ảnh AI 2K và đăng lên hệ thống.</p>
                       </div>
                     </div>
                   )}

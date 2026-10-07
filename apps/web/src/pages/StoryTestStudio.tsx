@@ -164,7 +164,7 @@ export default function StoryTestStudio() {
   };
 
   /**
-   * Single Image: Generate AI prompt & render 1 image via SangTao.ai (ChatGPT Image 2K)
+   * Single Image: Generate AI prompt & render 1 image (ChatGPT Image 2K)
    */
   const ztteam_handleGenerateSingleImage = async () => {
     let finalContent = content.trim();
@@ -214,14 +214,14 @@ export default function StoryTestStudio() {
       setSingleImagePrompt(promptData);
       setEditableImagePrompt(promptData.image_prompt_en);
 
-      /** Step 2: Render 1 image directly via SangTao.ai 2K */
+      /** Step 2: Render 1 image directly via AI 2K */
       const imgRes = await api.post('/story-test/render-single-image', {
         prompt: promptData.image_prompt_en,
         aspectRatio: imageAspectRatio,
       });
       setSingleImageResult(imgRes.data);
       setImageGenerationError(null);
-      ztteam_showToast('Đã tạo 1 ảnh Teaser 2K thành công qua SangTao.ai!', 'success');
+      ztteam_showToast('Đã tạo 1 ảnh Teaser 2K thành công!', 'success');
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || err.message || 'Lỗi khi tạo ảnh câu chuyện';
       setImageGenerationError(errorMsg);
@@ -232,7 +232,7 @@ export default function StoryTestStudio() {
   };
 
   /**
-   * Single Image: Re-render image with a new seed or updated prompt via SangTao.ai
+   * Single Image: Re-render image with a new seed or updated prompt via AI
    */
   const ztteam_handleReRenderImage = async () => {
     const promptToUse = editableImagePrompt.trim() || singleImagePrompt?.image_prompt_en;
@@ -553,7 +553,7 @@ export default function StoryTestStudio() {
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[20px]">draw</span>
-                    AI Phân Tích & Tạo 1 Ảnh Teaser 2K (SangTao.ai)
+                    AI Phân Tích & Tạo 1 Ảnh Teaser 2K
                   </>
                 )}
               </button>
@@ -569,7 +569,7 @@ export default function StoryTestStudio() {
                 </div>
                 <h4 className="text-base font-bold text-fb-text">Chưa Có Ảnh Nào Được Tạo</h4>
                 <p className="text-xs text-fb-text-muted mt-1 max-w-md mx-auto">
-                  Hãy nhập link nguồn bài viết hoặc dán câu chuyện ở cột bên trái và bấm <strong>"AI Phân Tích & Tạo 1 Ảnh Teaser 2K"</strong>. AI sẽ trích xuất khoảnh khắc đắt giá nhất và vẽ ảnh 2K qua SangTao.ai.
+                  Hãy nhập link nguồn bài viết hoặc dán câu chuyện ở cột bên trái và bấm <strong>"AI Phân Tích & Tạo 1 Ảnh Teaser 2K"</strong>. AI sẽ trích xuất khoảnh khắc đắt giá nhất và vẽ ảnh 2K.
                 </p>
               </div>
             )}
@@ -583,7 +583,7 @@ export default function StoryTestStudio() {
                   AI Đang Đọc Cốt Truyện & Sinh Ảnh 2K...
                 </h4>
                 <p className="text-xs text-fb-text-muted max-w-sm mx-auto">
-                  Đang chọn cảnh cao trào kịch tính nhất và vẽ ảnh 2K qua SangTao.ai (ChatGPT Image)... Quá trình mất khoảng 20-25 giây.
+                  Đang chọn cảnh cao trào kịch tính nhất và vẽ ảnh 2K... Quá trình mất khoảng 20-25 giây.
                 </p>
               </div>
             )}
@@ -596,7 +596,7 @@ export default function StoryTestStudio() {
                     <div>
                       <h4 className="text-sm font-bold text-fb-text flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                        Bức Ảnh Teaser Đơn Lẻ 2K (SangTao.ai)
+                        Bức Ảnh Teaser Đơn Lẻ 2K
                       </h4>
                       <p className="text-xs text-fb-text-muted mt-0.5">
                         Tỷ lệ {singleImageResult?.aspect_ratio || imageAspectRatio} • Kích thước{' '}
@@ -634,7 +634,7 @@ export default function StoryTestStudio() {
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2 animate-in fade-in duration-200">
                       <div className="flex items-center gap-2 font-bold text-amber-400">
                         <span className="material-symbols-outlined text-[18px]">error</span>
-                        <span>Không Thể Tạo Ảnh Từ SangTao.ai</span>
+                        <span>Không Thể Tạo Ảnh AI</span>
                       </div>
                       <p className="leading-relaxed text-fb-text">{imageGenerationError}</p>
                       <p className="text-[11px] text-fb-text-muted">
@@ -666,7 +666,7 @@ export default function StoryTestStudio() {
                         ) : (
                           <>
                             <span className="material-symbols-outlined animate-spin text-4xl text-fb-blue">sync</span>
-                            <span className="text-xs font-medium text-fb-text-muted">Đang sinh ảnh 2K qua SangTao.ai...</span>
+                            <span className="text-xs font-medium text-fb-text-muted">Đang sinh ảnh 2K AI...</span>
                           </>
                         )}
                       </div>

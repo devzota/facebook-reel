@@ -11,6 +11,7 @@ export interface ZTTeamAIPostCardProps {
   onDelete?: (item: any) => void;
   onZoom?: (imageUrl: string) => void;
   onQueueVideo?: (item: any) => void;
+  onUseOriginalImage?: (item: any) => void;
 }
 
 /**
@@ -28,6 +29,7 @@ export default function ZTTeamAIPostCard({
   onDelete,
   onZoom,
   onQueueVideo,
+  onUseOriginalImage,
 }: ZTTeamAIPostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -175,31 +177,38 @@ export default function ZTTeamAIPostCard({
         <div>{ztteam_renderStatusBadge()}</div>
       </div>
 
-      {/** 2.1. Timeline Info Bar (Thời gian tạo bài, tạo ảnh, lịch đăng dự kiến, thời điểm đã đăng) */}
-      <div className="px-4 py-2 bg-fb-surface-hover/20 border-y border-fb-surface-hover/40 grid grid-cols-2 gap-2 text-[11px]">
-        <div className="flex items-center gap-1.5 text-fb-text-muted truncate">
-          <span className="material-symbols-outlined text-[14px] text-cyan-400 shrink-0">edit_calendar</span>
+      {/** 2.1. Timeline Info Bar (Thời gian tạo bài, tạo ảnh, tạo video, lịch đăng dự kiến, thời điểm đã đăng) */}
+      <div className="px-4 py-2 bg-fb-surface-hover/20 border-y border-fb-surface-hover/40 grid grid-cols-3 gap-1.5 text-[10px]">
+        <div className="flex items-center gap-1 text-fb-text-muted truncate">
+          <span className="material-symbols-outlined text-[13px] text-cyan-400 shrink-0">edit_calendar</span>
           <span className="truncate">Tạo bài: <strong className="text-white/80 font-medium">{ztteam_formatDate(item.created_at)}</strong></span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-fb-text-muted truncate">
-          <span className="material-symbols-outlined text-[14px] text-blue-400 shrink-0">image</span>
+        <div className="flex items-center gap-1 text-fb-text-muted truncate">
+          <span className="material-symbols-outlined text-[13px] text-blue-400 shrink-0">image</span>
           <span className="truncate">Tạo ảnh: <strong className="text-white/80 font-medium">{item.image_url ? ztteam_formatDate(item.updated_at) : 'Đang xử lý'}</strong></span>
         </div>
 
+        <div className="flex items-center gap-1 text-fb-text-muted truncate">
+          <span className="material-symbols-outlined text-[13px] text-amber-400 shrink-0">movie</span>
+          <span className="truncate">Tạo video: <strong className="text-white/80 font-medium">
+            {item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : 'Chưa tạo'))}
+          </strong></span>
+        </div>
+
         {isAlreadyPosted ? (
-          <div className="col-span-2 flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
-            <span className="material-symbols-outlined text-[15px] shrink-0">check_circle</span>
+          <div className="col-span-3 flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+            <span className="material-symbols-outlined text-[14px] shrink-0">check_circle</span>
             <span className="font-semibold">Đã đăng FB: {ztteam_formatDate(item.posted_at || item.updated_at)}</span>
           </div>
         ) : item.scheduled_at ? (
-          <div className="col-span-2 flex items-center gap-1.5 text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
-            <span className="material-symbols-outlined text-[15px] shrink-0">schedule</span>
+          <div className="col-span-3 flex items-center gap-1.5 text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
+            <span className="material-symbols-outlined text-[14px] shrink-0">schedule</span>
             <span className="font-semibold">Lịch đăng dự kiến: {ztteam_formatDate(item.scheduled_at)}</span>
           </div>
         ) : (
-          <div className="col-span-2 flex items-center gap-1.5 text-fb-text-muted bg-fb-surface-hover/40 px-2 py-1 rounded-lg border border-white/5">
-            <span className="material-symbols-outlined text-[15px] shrink-0">pause_circle</span>
+          <div className="col-span-3 flex items-center gap-1.5 text-fb-text-muted bg-fb-surface-hover/40 px-2 py-1 rounded-lg border border-white/5">
+            <span className="material-symbols-outlined text-[14px] shrink-0">pause_circle</span>
             <span>Chờ xếp lịch hoặc đăng thủ công</span>
           </div>
         )}
@@ -219,7 +228,7 @@ export default function ZTTeamAIPostCard({
           <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none">
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300 shadow-md">
               <span className="material-symbols-outlined text-xs">auto_awesome</span>
-              ẢNH 2K SANGTAO.AI
+              ẢNH 2K AI
             </div>
 
             {item.video_url ? (
@@ -265,16 +274,29 @@ export default function ZTTeamAIPostCard({
                   {item.error_log}
                 </p>
               )}
-              {onRetry && (
-                <button
-                  type="button"
-                  onClick={() => onRetry(item)}
-                  className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/40 rounded-full text-xs font-semibold text-rose-200 border border-rose-500/30 transition-all flex items-center gap-1 mt-1 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-xs">refresh</span>
-                  Thử lại
-                </button>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                {onUseOriginalImage && (
+                  <button
+                    type="button"
+                    onClick={() => onUseOriginalImage(item)}
+                    className="px-3 py-1 bg-cyan-500/20 hover:bg-cyan-500/40 rounded-full text-xs font-semibold text-cyan-200 border border-cyan-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                    title="Tự động lấy ảnh gốc từ website làm chuẩn để tạo Video Reel"
+                  >
+                    <span className="material-symbols-outlined text-xs">auto_fix_high</span>
+                    Dùng ảnh gốc làm Video
+                  </button>
+                )}
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={() => onRetry(item)}
+                    className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/40 rounded-full text-xs font-semibold text-rose-200 border border-rose-500/30 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-xs">refresh</span>
+                    Thử lại
+                  </button>
+                )}
+              </div>
             </div>
           ) : item.video_url && showVideo ? (
             <div className="w-full h-full relative bg-black flex items-center justify-center">

@@ -692,6 +692,7 @@ export class ZTTeamImageController {
       data: {
         video_url: videoUrl,
         video_status: 'COMPLETED',
+        video_created_at: new Date(),
       },
     });
 
@@ -701,6 +702,113 @@ export class ZTTeamImageController {
       success: true,
       message: 'Đã gắn Video Reel vào bài viết thành công!',
       videoUrl,
+      post: updated,
+    };
+  }
+
+  /**
+   * ZTTeam: Lấy ảnh gốc từ WordPress làm chuẩn để tạo Video Reel khi tạo ảnh AI thất bại
+   * POST /api/image/:id/use-original-image
+   */
+  @Post(':id/use-original-image')
+  @UseGuards(ZTTeamAuthGuard)
+  async ztteam_useOriginalImage(@Param('id') id: string) {
+    const post = await this.prisma.ztteam_images.findUnique({
+      where: { id },
+      include: { page: true }
+    });
+
+    if (!post) {
+      throw new Error(`Không tìm thấy bài viết ${id}`);
+    }
+
+    let sourceImageUrl: string | null = null;
+
+    /** 1. Thử lấy ảnh gốc từ wp_post_url qua thẻ og:image */
+    if (post.wp_post_url) {
+      try {
+        const response = await fetch(post.wp_post_url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (response.ok) {
+          const html = await response.text();
+          const match = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i);
+          if (match && match[1]) {
+            sourceImageUrl = match[1];
+          }
+        }
+      } catch (err: any) {
+        /** Bỏ qua lỗi fetch HTML */
+      }
+    }
+
+    /** 2. Nếu chưa có, thử query WordPress REST API của bài viết */
+    if (!sourceImageUrl && post.wp_post_url && post.wp_post_id) {
+      try {
+        const urlObj = new URL(post.wp_post_url);
+        const origin = urlObj.origin;
+        const apiRes = await fetch(`${origin}/wp-json/wp/v2/posts/${post.wp_post_id}?_embed`, {
+          signal: AbortSignal.timeout(10000),
+        });
+        if (apiRes.ok) {
+          const wpData = await apiRes.json();
+          const featured = wpData._embedded?.['wp:featuredmedia']?.[0]?.source_url;
+          if (featured) {
+            sourceImageUrl = featured;
+          }
+        }
+      } catch (err: any) {
+        /** Bỏ qua lỗi REST API */
+      }
+    }
+
+    if (!sourceImageUrl) {
+      throw new Error('Không thể tìm thấy link ảnh gốc của bài viết từ website nguồn');
+    }
+
+    /** 3. Tải ảnh gốc về lưu vào storage local */
+    const axios = require('axios');
+    const itemDir = path.join(ztteam_getImagesPath(), id);
+    if (!fs.existsSync(itemDir)) {
+      fs.mkdirSync(itemDir, { recursive: true });
+    }
+    const localFilePath = path.join(itemDir, 'original.png');
+    const writer = fs.createWriteStream(localFilePath);
+
+    const imgRes = await axios({
+      url: sourceImageUrl,
+      method: 'GET',
+      responseType: 'stream',
+      timeout: 30000,
+    });
+    imgRes.data.pipe(writer);
+
+    await new Promise<void>((resolve, reject) => {
+      writer.on('finish', () => resolve());
+      writer.on('error', (err) => reject(err));
+    });
+
+    const newImageUrl = `/storage/images/${id}/original.png`;
+
+    /** 4. Cập nhật bài viết thành COMPLETED và đưa thẳng vào hàng đợi tạo video Reel (PENDING) */
+    const updated = await this.prisma.ztteam_images.update({
+      where: { id },
+      data: {
+        image_url: newImageUrl,
+        status: 'COMPLETED',
+        error_log: null,
+        video_status: 'PENDING',
+      },
+    });
+
+    this.eventEmitter.emit('image.updated', updated);
+
+    return {
+      success: true,
+      message: 'Đã lấy ảnh gốc thành công và đưa vào hàng đợi tạo Video Reel!',
+      imageUrl: newImageUrl,
       post: updated,
     };
   }

@@ -187,11 +187,6 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
               <span className="material-symbols-outlined text-[13px]">videocam_off</span> TẠO: TẮT
             </span>
           )}
-
-          <span className="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 rounded-full text-[10px] font-extrabold flex items-center gap-1">
-            <span className="material-symbols-outlined text-[13px]">palette</span>
-            {page.defaultReelTemplateName || 'Mặc định'}
-          </span>
         </div>
 
         {/** ZTTeam: Khối Tóm Tắt & Đánh Giá Cấu Hình - Sử dụng Shadow & Elevation thay vì Border */}

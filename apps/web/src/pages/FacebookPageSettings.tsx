@@ -524,7 +524,7 @@ export default function FacebookPageSettings() {
                   ]}
                 />
                 <p className="text-[11px] text-fb-text-muted mt-2">
-                  {postFormat === 'image' && 'Chuẩn định dạng: Tiêu đề VIẾT HOA + Hook Part 1 kịch tính + Ảnh AI SangTao 2K tỉ lệ 4:5 chân thực, sắc nét.'}
+                  {postFormat === 'image' && 'Chuẩn định dạng: Tiêu đề VIẾT HOA + Hook Part 1 kịch tính + Ảnh AI 2K tỉ lệ 4:5 chân thực, sắc nét.'}
                   {postFormat === 'reel' && 'Tạo video ngắn Reel 9:16 có giọng đọc AI sub voice và đăng lên Reels tab.'}
                   {postFormat === 'mixed' && 'Tự động luân phiên giữa bài viết ảnh 2K và video Reel theo lịch đăng.'}
                 </p>
