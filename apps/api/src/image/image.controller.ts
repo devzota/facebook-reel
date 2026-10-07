@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 /** @ts-ignore */
 import { diskStorage } from 'multer';
@@ -378,7 +378,7 @@ export class ZTTeamImageController {
       const utmCampaign = slugify(pageData?.name || 'page');
       trackingLinkManual = `${image.wp_post_url}${image.wp_post_url.includes('?') ? '&' : '?'}utm_source=image&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
       
-      if (image.page.add_link_to_caption) {
+      if (image.page?.add_link_to_caption) {
         const prefixes = [
           '👉 Discover more here:',
           '🔥 Read the full story:',
@@ -392,8 +392,15 @@ export class ZTTeamImageController {
     }
 
     let fbPostId: string;
-    /** ZTTeam: Nếu bài viết đã tạo Video Reel, ưu tiên xuất bản Reel/Video lên Facebook */
-    if (image.video_url) {
+    const pageFormat = image.page?.post_format || 'reel';
+
+    /** ZTTeam: Tuân thủ tuyệt đối cấu hình Kiểu bài đăng chính trên Fanpage (post_format) */
+    if (pageFormat === 'reel') {
+      /** Cấu hình: CHỈ ĐĂNG VIDEO (Reels) - Bắt buộc bài viết phải có Video Reel */
+      if (!image.video_url) {
+        throw new BadRequestException('Fanpage này được cấu hình [Chỉ Đăng Video (Reels)]. Bài viết này chưa có Video Reel 15s hoàn tất, vui lòng bấm [Tạo Video Reel] trước khi đăng bài!');
+      }
+
       let absoluteVideoPath = '';
       if (image.video_url.startsWith('/storage/')) {
         absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^\/storage\//, ''));
@@ -401,13 +408,47 @@ export class ZTTeamImageController {
         absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^[/\\]+/, ''));
       }
 
-      if (fs.existsSync(absoluteVideoPath)) {
-        const response = await this.facebookService.ztteam_publishReel(
-          image.page.fb_page_id,
-          absoluteVideoPath,
-          description
-        );
-        fbPostId = response.id;
+      if (!fs.existsSync(absoluteVideoPath)) {
+        throw new BadRequestException('File video Reel không tồn tại trên máy chủ, vui lòng bấm tạo lại video!');
+      }
+
+      const response = await this.facebookService.ztteam_publishReel(
+        image.page.fb_page_id,
+        absoluteVideoPath,
+        description
+      );
+      fbPostId = response.id;
+    } else if (pageFormat === 'image') {
+      /** Cấu hình: CHỈ ĐĂNG ẢNH 2K */
+      fbPostId = await this.facebookService.ztteam_publishPhoto(
+        image.page.fb_page_id,
+        absoluteImagePath,
+        description
+      );
+    } else {
+      /** Cấu hình: MIXED (Xen kẽ) - Ưu tiên Reel nếu đã tạo, nếu chưa thì đăng Ảnh */
+      if (image.video_url) {
+        let absoluteVideoPath = '';
+        if (image.video_url.startsWith('/storage/')) {
+          absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^\/storage\//, ''));
+        } else {
+          absoluteVideoPath = path.join(ztteam_getStorageRoot(), image.video_url.replace(/^[/\\]+/, ''));
+        }
+
+        if (fs.existsSync(absoluteVideoPath)) {
+          const response = await this.facebookService.ztteam_publishReel(
+            image.page.fb_page_id,
+            absoluteVideoPath,
+            description
+          );
+          fbPostId = response.id;
+        } else {
+          fbPostId = await this.facebookService.ztteam_publishPhoto(
+            image.page.fb_page_id,
+            absoluteImagePath,
+            description
+          );
+        }
       } else {
         fbPostId = await this.facebookService.ztteam_publishPhoto(
           image.page.fb_page_id,
@@ -415,12 +456,6 @@ export class ZTTeamImageController {
           description
         );
       }
-    } else {
-      fbPostId = await this.facebookService.ztteam_publishPhoto(
-        image.page.fb_page_id,
-        absoluteImagePath,
-        description
-      );
     }
 
     /** Quy trinh comment tu dong se duoc publisher.cron xu ly: sau 1 gio dang comment moi va sau 15 phut reply Part 2 + link */
