@@ -304,14 +304,14 @@ async function ztteam_workerLoop() {
       return;
     }
 
-    /** 2. Hỏi VPS xem có job PENDING không */
-    const res = await axios.get(`${API_URL}/image/pending-video`, { timeout: 10000 });
+    /** 2. Hỏi VPS xem có job tạo video không (ưu tiên bài PENDING, sau đó tự động nạp các bài Reel/Mixed chưa có video) */
+    const res = await axios.get(`${API_URL}/image/pending-video?auto=true`, { timeout: 10000 });
     if (res.data && res.data.hasJob && res.data.job) {
       isProcessing = true;
       await ztteam_processVideoJobOnMuse(res.data.job);
       isProcessing = false;
     } else {
-      process.stdout.write(`\r[${new Date().toLocaleTimeString()}] Đang lắng nghe VPS... (Chưa có bài nào trong hàng đợi PENDING)`);
+      process.stdout.write(`\r[${new Date().toLocaleTimeString()}] Đang lắng nghe VPS... (Đã hoàn tất toàn bộ video cho Fanpage Reel/Mixed)`);
     }
   } catch (err) {
     if (err.code === 'ECONNREFUSED') {

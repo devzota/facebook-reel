@@ -238,6 +238,8 @@ export class ZTTeamCrawlerService {
         },
       });
 
+      const shouldAutoQueueVideo = targetPage.post_format === 'reel' || targetPage.post_format === 'mixed';
+
       if (imgRecord) {
         imgRecord = await this.prisma.ztteam_images.update({
           where: { id: imgRecord.id },
@@ -250,6 +252,7 @@ export class ZTTeamCrawlerService {
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',
+            video_status: shouldAutoQueueVideo ? 'PENDING' : 'NONE',
             created_at: new Date(), /** Update timestamp to reflect exact recent crawl/render time */
             updated_at: new Date(),
           },
@@ -267,6 +270,7 @@ export class ZTTeamCrawlerService {
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED', /** Ready for publisher.cron to post to Facebook! */
+            video_status: shouldAutoQueueVideo ? 'PENDING' : 'NONE',
           },
         });
       }

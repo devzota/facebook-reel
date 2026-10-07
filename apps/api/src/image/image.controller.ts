@@ -609,27 +609,43 @@ export class ZTTeamImageController {
    */
   @Get('pending-video')
   async ztteam_getPendingVideo(@Query('auto') auto?: string) {
-    /** 1. Ưu tiên bài viết được đánh dấu thủ công là PENDING */
+    /** 1. Ưu tiên bài viết được đánh dấu PENDING thuộc Fanpage có cài đặt Reel hoặc Mixed */
     let post = await this.prisma.ztteam_images.findFirst({
       where: {
         status: 'COMPLETED',
         image_url: { not: null },
         video_status: 'PENDING',
+        page: {
+          post_format: { in: ['reel', 'mixed'] },
+        },
       },
+      include: { page: true },
       orderBy: { updated_at: 'asc' },
     });
 
-    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy bài COMPLETED có ảnh chưa có video */
+    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video */
     if (!post && auto === 'true') {
       post = await this.prisma.ztteam_images.findFirst({
         where: {
           status: 'COMPLETED',
           image_url: { not: null },
           video_url: null,
-          video_status: 'NONE',
+          video_status: { in: ['NONE', 'FAILED'] },
+          page: {
+            post_format: { in: ['reel', 'mixed'] },
+          },
         },
+        include: { page: true },
         orderBy: { created_at: 'desc' },
       });
+
+      /** Đánh dấu PENDING ngay để giao diện cập nhật và tránh lần poll tiếp theo bị trùng bài */
+      if (post) {
+        await this.prisma.ztteam_images.update({
+          where: { id: post.id },
+          data: { video_status: 'PENDING' },
+        });
+      }
     }
 
     if (!post) {
