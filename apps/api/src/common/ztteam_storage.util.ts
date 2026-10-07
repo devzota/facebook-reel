@@ -21,6 +21,10 @@ export function ztteam_getYoutubePath(...subpaths: string[]): string {
   return path.join(ztteam_getStorageRoot(), 'youtube', ...subpaths);
 }
 
+export function ztteam_getVideosPath(...subpaths: string[]): string {
+  return path.join(ztteam_getStorageRoot(), 'videos', ...subpaths);
+}
+
 export function ztteam_ensureStorageDirs(): void {
   const root = ztteam_getStorageRoot();
   const dirs = [
@@ -29,6 +33,7 @@ export function ztteam_ensureStorageDirs(): void {
     path.join(root, 'images'),
     path.join(root, 'templates'),
     path.join(root, 'youtube'),
+    path.join(root, 'videos'),
   ];
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) {

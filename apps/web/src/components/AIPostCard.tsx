@@ -10,6 +10,7 @@ export interface ZTTeamAIPostCardProps {
   onRetry?: (item: any) => void;
   onDelete?: (item: any) => void;
   onZoom?: (imageUrl: string) => void;
+  onQueueVideo?: (item: any) => void;
 }
 
 /**
@@ -26,8 +27,10 @@ export default function ZTTeamAIPostCard({
   onRetry,
   onDelete,
   onZoom,
+  onQueueVideo,
 }: ZTTeamAIPostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   const isRendering = item.status === 'RENDERING' || item.status === 'PROCESSING' || item.status === 'QUEUED';
   const isCompleted = item.status === 'COMPLETED';
@@ -212,10 +215,38 @@ export default function ZTTeamAIPostCard({
       {/** 4. Media Container 4:5 */}
       <div className="px-4 py-1">
         <div className="w-full aspect-[4/5] bg-black/60 rounded-xl relative overflow-hidden group/media border border-white/5">
-          {/** 2K Badge */}
-          <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300">
-            <span className="material-symbols-outlined text-xs">auto_awesome</span>
-            ẢNH 2K SANGTAO.AI
+          {/** Badges Top Bar */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300 shadow-md">
+              <span className="material-symbols-outlined text-xs">auto_awesome</span>
+              ẢNH 2K SANGTAO.AI
+            </div>
+
+            {item.video_url ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVideo(!showVideo);
+                }}
+                className={`pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
+                  showVideo
+                    ? 'bg-amber-400 text-black shadow-amber-400/20'
+                    : 'bg-black/70 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:bg-black/90'
+                }`}
+                title="Bấm để chuyển đổi giữa Ảnh và Video Reel"
+              >
+                <span className="material-symbols-outlined text-xs">
+                  {showVideo ? 'photo' : 'movie'}
+                </span>
+                <span>{showVideo ? 'XEM ẢNH' : 'REEL 15S'}</span>
+              </button>
+            ) : item.video_status === 'PENDING' ? (
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 backdrop-blur-md animate-pulse shadow-md">
+                <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                ĐANG TẠO REEL
+              </div>
+            ) : null}
           </div>
 
           {isRendering ? (
@@ -244,6 +275,17 @@ export default function ZTTeamAIPostCard({
                   Thử lại
                 </button>
               )}
+            </div>
+          ) : item.video_url && showVideo ? (
+            <div className="w-full h-full relative bg-black flex items-center justify-center">
+              <video
+                src={item.video_url}
+                controls
+                autoPlay
+                loop
+                playsInline
+                className="w-full h-full object-cover"
+              />
             </div>
           ) : item.image_url ? (
             <div
@@ -459,6 +501,17 @@ export default function ZTTeamAIPostCard({
             >
               <span className="material-symbols-outlined text-[16px]">download</span>
             </a>
+          )}
+
+          {isCompleted && !item.video_url && item.video_status !== 'PENDING' && onQueueVideo && (
+            <button
+              type="button"
+              onClick={() => onQueueVideo(item)}
+              className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-amber-500/20 text-fb-text-muted hover:text-amber-300 transition-all flex items-center justify-center border border-white/5 cursor-pointer shadow-sm"
+              title="Đưa bài viết vào hàng đợi tạo Video Reel 15s (Muse AI)"
+            >
+              <span className="material-symbols-outlined text-[16px]">movie</span>
+            </button>
           )}
 
           {(isFailed || item.status === 'COMPLETED') && onRetry && (

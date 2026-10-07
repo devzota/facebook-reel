@@ -1,4 +1,7 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+/** @ts-ignore */
+import { diskStorage } from 'multer';
 import { ZTTeamAuthGuard } from '../auth/auth.guard';
 import { ZTTeamImageProcessor } from './image.processor';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,7 +11,7 @@ import { map } from 'rxjs/operators';
 import { ZTTeamFacebookService } from '../facebook/facebook.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ztteam_getImagesPath, ztteam_getStorageRoot } from '../common/ztteam_storage.util';
+import { ztteam_getImagesPath, ztteam_getStorageRoot, ztteam_getVideosPath } from '../common/ztteam_storage.util';
 
 @Controller('image')
 export class ZTTeamImageController {
@@ -527,5 +530,149 @@ export class ZTTeamImageController {
 
     await this.prisma.ztteam_images.delete({ where: { id } });
     return { success: true };
+  }
+
+  /**
+   * ZTTeam: Lấy bài viết đang chờ tạo Video Reel cho Muse Worker
+   * GET /api/image/pending-video
+   */
+  @Get('pending-video')
+  async ztteam_getPendingVideo(@Query('auto') auto?: string) {
+    /** 1. Ưu tiên bài viết được đánh dấu thủ công là PENDING */
+    let post = await this.prisma.ztteam_images.findFirst({
+      where: {
+        status: 'COMPLETED',
+        image_url: { not: null },
+        video_status: 'PENDING',
+      },
+      orderBy: { updated_at: 'asc' },
+    });
+
+    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy bài COMPLETED có ảnh chưa có video */
+    if (!post && auto === 'true') {
+      post = await this.prisma.ztteam_images.findFirst({
+        where: {
+          status: 'COMPLETED',
+          image_url: { not: null },
+          video_url: null,
+          video_status: 'NONE',
+        },
+        orderBy: { created_at: 'desc' },
+      });
+    }
+
+    if (!post) {
+      return { success: true, hasJob: false };
+    }
+
+    /** Tạo teaser prompt ngắn gọn, hấp dẫn cho Muse */
+    let snippet = post.wp_post_title;
+    if (post.ai_caption) {
+      const cleanCap = post.ai_caption.replace(/(\.\.\.FULL STORY.*|👉.*)/gi, '').trim();
+      snippet = cleanCap.slice(0, 260);
+    }
+    const prompt = `Tạo video 15s dựa trên ảnh và nội dung này: ${snippet}`;
+
+    return {
+      success: true,
+      hasJob: true,
+      job: {
+        id: post.id,
+        wpPostId: post.wp_post_id,
+        title: post.wp_post_title,
+        imageUrl: post.image_url,
+        caption: post.ai_caption,
+        prompt,
+      },
+    };
+  }
+
+  /**
+   * ZTTeam: Đưa bài viết vào hàng đợi tạo video Reel
+   * POST /api/image/:id/queue-video
+   */
+  @Post(':id/queue-video')
+  @UseGuards(ZTTeamAuthGuard)
+  async ztteam_queueVideo(@Param('id') id: string) {
+    const post = await this.prisma.ztteam_images.findUnique({ where: { id } });
+    if (!post) {
+      throw new Error(`Không tìm thấy bài viết ${id}`);
+    }
+
+    const updated = await this.prisma.ztteam_images.update({
+      where: { id },
+      data: { video_status: 'PENDING' },
+    });
+    this.eventEmitter.emit('image.updated', updated);
+
+    return {
+      success: true,
+      message: 'Đã đưa bài viết vào hàng đợi tạo Video Reel cho Worker',
+      post: updated,
+    };
+  }
+
+  /**
+   * ZTTeam: Worker upload file video MP4 hoàn thành lên hệ thống
+   * POST /api/image/:id/attach-video
+   */
+  @Post(':id/attach-video')
+  @UseInterceptors(FileInterceptor('video', {
+    storage: diskStorage({
+      destination: (req: any, file: any, cb: any) => {
+        const videosPath = ztteam_getVideosPath();
+        if (!fs.existsSync(videosPath)) {
+          fs.mkdirSync(videosPath, { recursive: true });
+        }
+        cb(null, videosPath);
+      },
+      filename: (req: any, file: any, cb: any) => {
+        const timestamp = Date.now();
+        const safeId = req.params.id || 'vid';
+        cb(null, `muse_reel_${safeId}_${timestamp}.mp4`);
+      },
+    }),
+  }))
+  async ztteam_attachVideo(@Param('id') id: string, @UploadedFile() file: any) {
+    if (!file) {
+      throw new Error('Chưa có file video nào được tải lên');
+    }
+
+    const videoUrl = `/storage/videos/${file.filename}`;
+    const updated = await this.prisma.ztteam_images.update({
+      where: { id },
+      data: {
+        video_url: videoUrl,
+        video_status: 'COMPLETED',
+      },
+    });
+
+    this.eventEmitter.emit('image.updated', updated);
+
+    return {
+      success: true,
+      message: 'Đã gắn Video Reel vào bài viết thành công!',
+      videoUrl,
+      post: updated,
+    };
+  }
+
+  /**
+   * ZTTeam: Worker báo lỗi khi tạo video thất bại
+   * POST /api/image/:id/fail-video
+   */
+  @Post(':id/fail-video')
+  async ztteam_failVideo(@Param('id') id: string, @Body() body: { error?: string }) {
+    const updated = await this.prisma.ztteam_images.update({
+      where: { id },
+      data: {
+        video_status: 'FAILED',
+        error_log: body.error ? `Muse Video Error: ${body.error}` : 'Muse Video Generation Failed',
+      },
+    });
+
+    this.eventEmitter.emit('image.updated', updated);
+
+    return { success: true, post: updated };
   }
 }

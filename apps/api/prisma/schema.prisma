@@ -231,6 +231,8 @@ model ztteam_images {
   wp_post_url     String?
   template_id     String
   image_url       String?
+  video_url       String?
+  video_status    String    @default("NONE") /** NONE, PENDING, COMPLETED, FAILED */
   ai_caption      String?   @db.Text
   ai_first_comment String?  @db.Text
   status          String    @default("QUEUED") /** QUEUED, RENDERING, COMPLETED, FAILED */

@@ -178,6 +178,19 @@ export default function AIFactory() {
     }
   };
 
+  /** Đưa bài viết vào hàng đợi tạo Video Reel qua Muse Worker */
+  const ztteam_queueVideoReel = async (itemOrId: any) => {
+    const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id;
+    if (!id) return;
+    try {
+      const res = await api.post(`image/${id}/queue-video`);
+      ztteam_showToast(res.data?.message || 'Đã đưa vào hàng đợi tạo Video Reel cho Worker', 'success');
+      ztteam_loadItems(true);
+    } catch (error: any) {
+      ztteam_showToast(error.response?.data?.message || 'Lỗi đưa vào hàng đợi tạo Reel', 'error');
+    }
+  };
+
   /** Đặt lại toàn bộ bộ lọc */
   const ztteam_resetFilters = () => {
     setFilterStatus('');
@@ -395,6 +408,7 @@ export default function AIFactory() {
                   onPostNow={ztteam_postToFB}
                   onRetry={ztteam_retryItem}
                   onDelete={ztteam_deleteItem}
+                  onQueueVideo={ztteam_queueVideoReel}
                 />
               ))}
             </div>
