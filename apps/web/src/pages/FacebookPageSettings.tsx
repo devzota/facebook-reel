@@ -331,6 +331,28 @@ export default function FacebookPageSettings() {
     }
   };
 
+  /** Lấy ảnh gốc từ website làm chuẩn để tạo Video Reel */
+  const ztteam_useOriginalImage = async (item: any) => {
+    try {
+      const res = await api.post(`image/${item.id}/use-original-image`);
+      ztteam_showToast(res.data?.message || 'Đã lấy ảnh gốc thành công và đưa vào hàng đợi tạo Video Reel', 'success');
+      ztteam_loadQueue(true);
+    } catch (error: any) {
+      ztteam_showToast(error.response?.data?.message || 'Lỗi lấy ảnh gốc', 'error');
+    }
+  };
+
+  /** Đưa bài viết vào hàng đợi tạo Video Reel qua Muse Worker */
+  const ztteam_queueVideoReel = async (item: any) => {
+    try {
+      const res = await api.post(`image/${item.id}/queue-video`);
+      ztteam_showToast(res.data?.message || 'Đã đưa vào hàng đợi tạo Video Reel cho Worker', 'success');
+      ztteam_loadQueue(true);
+    } catch (error: any) {
+      ztteam_showToast(error.response?.data?.message || 'Lỗi đưa vào hàng đợi tạo Reel', 'error');
+    }
+  };
+
   /** Status Badge Helper */
   const ztteam_getStatusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string; border: string; label: string; pulse?: boolean }> = {
@@ -910,6 +932,8 @@ export default function FacebookPageSettings() {
                       onPostNow={(it) => ztteam_publishNow(it)}
                       onRetry={(it) => ztteam_retryQueueItem(it)}
                       onDelete={(it) => ztteam_deleteQueueItem(it)}
+                      onQueueVideo={(it) => ztteam_queueVideoReel(it)}
+                      onUseOriginalImage={(it) => ztteam_useOriginalImage(it)}
                     />
                   ))}
                 </div>

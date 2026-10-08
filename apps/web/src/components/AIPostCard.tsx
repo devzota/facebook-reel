@@ -541,6 +541,18 @@ export default function ZTTeamAIPostCard({
             </a>
           )}
 
+          {/** Nút Lấy ảnh gốc từ bài viết nguồn để làm chuẩn tạo Video Reel */}
+          {onUseOriginalImage && !isAlreadyPosted && (
+            <button
+              type="button"
+              onClick={() => onUseOriginalImage(item)}
+              className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-cyan-500/20 text-fb-text-muted hover:text-cyan-300 transition-all flex items-center justify-center border border-white/5 cursor-pointer shadow-sm"
+              title="Lấy ảnh gốc từ bài viết nguồn làm chuẩn và đưa vào hàng đợi tạo Video Reel"
+            >
+              <span className="material-symbols-outlined text-[16px]">photo_library</span>
+            </button>
+          )}
+
           {isCompleted && !item.video_url && item.video_status !== 'PENDING' && onQueueVideo && (
             <button
               type="button"

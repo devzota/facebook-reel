@@ -889,6 +889,7 @@ export class ZTTeamImageController {
       where: { id },
       data: {
         image_url: newImageUrl,
+        template_id: 'source_original',
         status: 'COMPLETED',
         error_log: null,
         video_status: 'PENDING',
