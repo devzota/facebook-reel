@@ -350,24 +350,47 @@ export class ZTTeamDashboardService {
         _count: { id: true }
       });
 
-      const dailyCreatedRaw = await this.prisma.ztteam_reels.groupBy({
-        by: ['page_id'],
-        where: {
-          page_id: { in: pageIds },
-          created_at: { gte: startOfDay, lte: endOfDay }
-        },
-        _count: { id: true }
-      });
+      /** ZTTeam: Thống kê số bài viết tạo (Gộp cả Reels và Images) */
+      const [dailyCreatedReelsRaw, dailyCreatedImagesRaw] = await Promise.all([
+        this.prisma.ztteam_reels.groupBy({
+          by: ['page_id'],
+          where: {
+            page_id: { in: pageIds },
+            created_at: { gte: startOfDay, lte: endOfDay }
+          },
+          _count: { id: true }
+        }),
+        this.prisma.ztteam_images.groupBy({
+          by: ['page_id'],
+          where: {
+            page_id: { in: pageIds },
+            created_at: { gte: startOfDay, lte: endOfDay }
+          },
+          _count: { id: true }
+        }),
+      ]);
 
-      const dailyPublishedRaw = await this.prisma.ztteam_reels.groupBy({
-        by: ['page_id'],
-        where: {
-          page_id: { in: pageIds },
-          is_posted: true,
-          posted_at: { gte: startOfDay, lte: endOfDay }
-        },
-        _count: { id: true }
-      });
+      /** ZTTeam: Thống kê số bài viết đã xuất bản (Gộp cả Reels và Images) */
+      const [dailyPublishedReelsRaw, dailyPublishedImagesRaw] = await Promise.all([
+        this.prisma.ztteam_reels.groupBy({
+          by: ['page_id'],
+          where: {
+            page_id: { in: pageIds },
+            is_posted: true,
+            posted_at: { gte: startOfDay, lte: endOfDay }
+          },
+          _count: { id: true }
+        }),
+        this.prisma.ztteam_images.groupBy({
+          by: ['page_id'],
+          where: {
+            page_id: { in: pageIds },
+            is_posted: true,
+            posted_at: { gte: startOfDay, lte: endOfDay }
+          },
+          _count: { id: true }
+        }),
+      ]);
 
       const dataPoint: any = { name: dateStr.split('-').slice(1).join('/') };
       
@@ -386,14 +409,24 @@ export class ZTTeamDashboardService {
       });
 
       let totalPublishedForDay = 0;
-      dailyPublishedRaw.forEach(p => {
+      dailyPublishedReelsRaw.forEach(p => {
+        const page = pages.find(pg => pg.id === p.page_id);
+        if (page) dataPoint[`pub_${page.name}`] += p._count.id;
+        totalPublishedForDay += p._count.id;
+      });
+      dailyPublishedImagesRaw.forEach(p => {
         const page = pages.find(pg => pg.id === p.page_id);
         if (page) dataPoint[`pub_${page.name}`] += p._count.id;
         totalPublishedForDay += p._count.id;
       });
 
       let totalCreatedForDay = 0;
-      dailyCreatedRaw.forEach(r => {
+      dailyCreatedReelsRaw.forEach(r => {
+        const page = pages.find(pg => pg.id === r.page_id);
+        if (page) dataPoint[`create_${page.name}`] += r._count.id;
+        totalCreatedForDay += r._count.id;
+      });
+      dailyCreatedImagesRaw.forEach(r => {
         const page = pages.find(pg => pg.id === r.page_id);
         if (page) dataPoint[`create_${page.name}`] += r._count.id;
         totalCreatedForDay += r._count.id;
@@ -408,16 +441,27 @@ export class ZTTeamDashboardService {
 
     const leaderboard = [];
     for (const page of pages) {
-      const pageReels = await this.prisma.ztteam_reels.groupBy({
-        by: ['status', 'is_posted'],
-        where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
-        _count: { id: true }
-      });
+      const [pageReels, pageImages] = await Promise.all([
+        this.prisma.ztteam_reels.groupBy({
+          by: ['status', 'is_posted'],
+          where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
+          _count: { id: true }
+        }),
+        this.prisma.ztteam_images.groupBy({
+          by: ['status', 'is_posted'],
+          where: { page_id: page.id, OR: [{ is_posted: true }, { status: 'FAILED' }] },
+          _count: { id: true }
+        }),
+      ]);
       let published = 0;
       let failed = 0;
       pageReels.forEach(r => {
         if (r.is_posted) published += r._count.id;
         if (r.status === 'FAILED') failed += r._count.id;
+      });
+      pageImages.forEach(img => {
+        if (img.is_posted) published += img._count.id;
+        if (img.status === 'FAILED') failed += img._count.id;
       });
 
       leaderboard.push({

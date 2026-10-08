@@ -190,10 +190,10 @@ export default function ZTTeamAIPostCard({
           <strong className="text-white/90 font-medium">{item.image_url ? ztteam_formatDate(item.updated_at) : '--'}</strong>
         </div>
 
-        <div className="text-fb-text-muted truncate min-w-0" title={`Tạo video: ${item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : '--'))}`}>
+        <div className="text-fb-text-muted truncate min-w-0" title={item.video_status === 'FAILED' ? `Lỗi tạo video: ${item.error_log || 'Thất bại'}` : (item.video_created_at ? `Tạo video: ${ztteam_formatDate(item.video_created_at)}` : (item.video_url ? `Tạo video: ${ztteam_formatDate(item.updated_at)}` : (item.video_status === 'PENDING' ? 'Đang tạo video...' : '--')))}>
           <span className="font-extrabold text-amber-400">Video:</span>{' '}
-          <strong className="text-white/90 font-medium">
-            {item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : '--'))}
+          <strong className={`font-medium ${item.video_status === 'FAILED' ? 'text-red-400 font-bold' : 'text-white/90'}`}>
+            {item.video_status === 'FAILED' ? 'Lỗi' : (item.video_created_at ? ztteam_formatDate(item.video_created_at) : (item.video_url ? ztteam_formatDate(item.updated_at) : (item.video_status === 'PENDING' ? 'Đang tạo' : '--')))}
           </strong>
         </div>
 
@@ -255,6 +255,14 @@ export default function ZTTeamAIPostCard({
               <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 backdrop-blur-md animate-pulse shadow-md">
                 <span className="material-symbols-outlined text-xs animate-spin">sync</span>
                 ĐANG TẠO REEL
+              </div>
+            ) : item.video_status === 'FAILED' ? (
+              <div 
+                className="pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-[10px] font-bold text-red-300 backdrop-blur-md shadow-md cursor-help"
+                title={`Muse tạo video thất bại: ${item.error_log || 'Lỗi không xác định'}`}
+              >
+                <span className="material-symbols-outlined text-xs text-red-400">error</span>
+                LỖI TẠO REEL
               </div>
             ) : null}
           </div>
@@ -530,10 +538,20 @@ export default function ZTTeamAIPostCard({
             <button
               type="button"
               onClick={() => onQueueVideo(item)}
-              className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-amber-500/20 text-fb-text-muted hover:text-amber-300 transition-all flex items-center justify-center border border-white/5 cursor-pointer shadow-sm"
-              title="Đưa bài viết vào hàng đợi tạo Video Reel 15s (Muse AI)"
+              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center border cursor-pointer shadow-sm ${
+                item.video_status === 'FAILED'
+                  ? 'bg-red-500/15 border-red-500/30 text-red-300 hover:bg-red-500/30 animate-pulse'
+                  : 'bg-fb-surface-hover border-white/5 text-fb-text-muted hover:bg-amber-500/20 hover:text-amber-300'
+              }`}
+              title={
+                item.video_status === 'FAILED'
+                  ? `Muse tạo video bị lỗi: ${item.error_log || 'Thất bại'}. Bấm để thử lại tạo video Reel!`
+                  : "Đưa bài viết vào hàng đợi tạo Video Reel 15s (Muse AI)"
+              }
             >
-              <span className="material-symbols-outlined text-[16px]">movie</span>
+              <span className="material-symbols-outlined text-[16px]">
+                {item.video_status === 'FAILED' ? 'replay' : 'movie'}
+              </span>
             </button>
           )}
 

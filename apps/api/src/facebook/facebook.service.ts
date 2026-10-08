@@ -132,7 +132,21 @@ export class ZTTeamFacebookService {
           pageData.avatar = `https://graph.facebook.com/${page.id}/picture?type=large`;
         }
 
-        const newCount = page.followers_count ?? page.fan_count;
+        let newCount = page.followers_count ?? page.fan_count;
+        if ((newCount === undefined || newCount === 0) && page.id && page.access_token) {
+          try {
+            const directPageRes = await firstValueFrom(
+              this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${page.id}`, {
+                params: { fields: 'followers_count,fan_count', access_token: page.access_token }
+              })
+            );
+            if (directPageRes.data?.followers_count !== undefined || directPageRes.data?.fan_count !== undefined) {
+              newCount = directPageRes.data.followers_count ?? directPageRes.data.fan_count;
+            }
+          } catch (e: any) {
+            /** Bỏ qua nếu fallback lỗi */
+          }
+        }
         if (newCount !== undefined) {
           pageData.follower_count = newCount;
         }
@@ -1224,22 +1238,30 @@ export class ZTTeamFacebookService {
 
         let isPageValid = true;
         let pageErrorMsg = '';
+        let followerCountFromFb: number | undefined = undefined;
 
         try {
-          await firstValueFrom(
+          const pageRes = await firstValueFrom(
             this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${p.fb_page_id}`, {
-              params: { fields: 'id,name', access_token: p.page_token_encrypted }
+              params: { fields: 'id,name,followers_count,fan_count', access_token: p.page_token_encrypted }
             })
           );
+          if (pageRes.data?.followers_count !== undefined || pageRes.data?.fan_count !== undefined) {
+            followerCountFromFb = pageRes.data.followers_count ?? pageRes.data.fan_count;
+          }
         } catch (err: any) {
           isPageValid = false;
           pageErrorMsg = err.response?.data?.error?.message || err.message;
         }
 
         const newStatus = isPageValid ? 'active' : 'expired';
+        const pageUpdateData: any = { token_status: newStatus, last_checked: new Date() };
+        if (followerCountFromFb !== undefined) {
+          pageUpdateData.follower_count = followerCountFromFb;
+        }
         await this.prisma.ztteam_pages.update({
           where: { id: p.id },
-          data: { token_status: newStatus, last_checked: new Date() }
+          data: pageUpdateData
         });
 
         if (!isPageValid) {

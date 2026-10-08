@@ -396,17 +396,7 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => handleTestPost(page.id)}
-            disabled={testingPageId === page.id || isExpired}
-            className="w-8 h-8 flex items-center justify-center text-fb-blue bg-blue-500/15 hover:bg-blue-500 hover:text-white rounded-full transition-all disabled:opacity-50 shadow-sm"
-            title="Test đăng bài"
-          >
-            <span className={`material-symbols-outlined text-sm ${testingPageId === page.id ? 'animate-spin' : ''}`}>
-              {testingPageId === page.id ? 'sync' : 'send'}
-            </span>
-          </button>
-
+          {/** Tạm ẩn nút Test đăng bài theo yêu cầu */}
           <a
             href={postUrl}
             target="_blank"

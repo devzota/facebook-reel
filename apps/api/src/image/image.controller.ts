@@ -715,14 +715,12 @@ export class ZTTeamImageController {
       text = text.replace(regex, replacement);
     }
 
-    /** 4. Rút gọn thành đoạn tóm tắt ngắn kịch tính (dưới 250 ký tự, phù hợp cho Reel 15 giây) */
+    /** 4. Chuẩn hóa độ dài câu chuyện: giữ trọn vẹn toàn bộ đoạn hook và diễn biến kịch tính (tối đa 800 ký tự) */
     text = text.replace(/\s+/g, ' ').trim();
-    if (text.length > 250) {
-      const cutIndex = text.lastIndexOf('.', 250);
-      if (cutIndex > 100) {
+    if (text.length > 800) {
+      const cutIndex = text.lastIndexOf('.', 800);
+      if (cutIndex > 400) {
         text = text.substring(0, cutIndex + 1);
-      } else {
-        text = text.substring(0, 240) + '...';
       }
     }
 
