@@ -12,6 +12,7 @@ import { ZTTeamFacebookService } from '../facebook/facebook.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ztteam_getImagesPath, ztteam_getStorageRoot, ztteam_getVideosPath } from '../common/ztteam_storage.util';
+import { ZTTeamFetcherService } from '../crawler/fetcher.service';
 
 @Controller('image')
 export class ZTTeamImageController {
@@ -20,6 +21,7 @@ export class ZTTeamImageController {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly facebookService: ZTTeamFacebookService,
+    private readonly fetcherService: ZTTeamFetcherService,
   ) {}
 
   @Sse('events')
@@ -799,7 +801,7 @@ export class ZTTeamImageController {
   }
 
   /**
-   * ZTTeam: Lấy ảnh gốc từ WordPress làm chuẩn để tạo Video Reel khi tạo ảnh AI thất bại
+   * ZTTeam: Lấy ảnh gốc từ website làm chuẩn để tạo Video Reel khi tạo ảnh AI thất bại
    * POST /api/image/:id/use-original-image
    */
   @Post(':id/use-original-image')
@@ -807,84 +809,138 @@ export class ZTTeamImageController {
   async ztteam_useOriginalImage(@Param('id') id: string) {
     const post = await this.prisma.ztteam_images.findUnique({
       where: { id },
-      include: { page: true }
+      include: { page: true },
     });
 
     if (!post) {
       throw new Error(`Không tìm thấy bài viết ${id}`);
     }
 
-    let sourceImageUrl: string | null = null;
-
-    /** 1. Thử lấy ảnh gốc từ wp_post_url qua thẻ og:image */
-    if (post.wp_post_url) {
-      try {
-        const response = await fetch(post.wp_post_url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (response.ok) {
-          const html = await response.text();
-          const match = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
-                        html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i);
-          if (match && match[1]) {
-            sourceImageUrl = match[1];
-          }
-        }
-      } catch (err: any) {
-        /** Bỏ qua lỗi fetch HTML */
-      }
-    }
-
-    /** 2. Nếu chưa có, thử query WordPress REST API của bài viết */
-    if (!sourceImageUrl && post.wp_post_url && post.wp_post_id) {
-      try {
-        const urlObj = new URL(post.wp_post_url);
-        const origin = urlObj.origin;
-        const apiRes = await fetch(`${origin}/wp-json/wp/v2/posts/${post.wp_post_id}?_embed`, {
-          signal: AbortSignal.timeout(10000),
-        });
-        if (apiRes.ok) {
-          const wpData = await apiRes.json();
-          const featured = wpData._embedded?.['wp:featuredmedia']?.[0]?.source_url;
-          if (featured) {
-            sourceImageUrl = featured;
-          }
-        }
-      } catch (err: any) {
-        /** Bỏ qua lỗi REST API */
-      }
-    }
-
-    if (!sourceImageUrl) {
-      throw new Error('Không thể tìm thấy link ảnh gốc của bài viết từ website nguồn');
-    }
-
-    /** 3. Tải ảnh gốc về lưu vào storage local */
-    const axios = require('axios');
     const itemDir = path.join(ztteam_getImagesPath(), id);
     if (!fs.existsSync(itemDir)) {
       fs.mkdirSync(itemDir, { recursive: true });
     }
     const localFilePath = path.join(itemDir, 'original.png');
-    const writer = fs.createWriteStream(localFilePath);
+    const localOutputPath = path.join(itemDir, 'output.png');
+    const localSourceOriginal = path.join(itemDir, 'source_original.png');
 
-    const imgRes = await axios({
-      url: sourceImageUrl,
-      method: 'GET',
-      responseType: 'stream',
-      timeout: 30000,
-    });
-    imgRes.data.pipe(writer);
+    /** 1. Kiểm tra nếu đã có file ảnh gốc dự phòng được lưu trước đó tại thư mục riêng */
+    let hasSourceFile = false;
+    if (fs.existsSync(localSourceOriginal)) {
+      try {
+        fs.copyFileSync(localSourceOriginal, localFilePath);
+        fs.copyFileSync(localSourceOriginal, localOutputPath);
+        hasSourceFile = true;
+      } catch (e) {
+        /** Tiếp tục fallback tải qua mạng */
+      }
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      writer.on('finish', () => resolve());
-      writer.on('error', (err) => reject(err));
-    });
+    /** 2. Nếu chưa có file gốc trên ổ đĩa, xác định URL bài viết nguồn từ ztteam_crawl_history */
+    let sourceImageUrl: string | null = null;
+
+    if (!hasSourceFile) {
+      let sourceUrl: string | null = null;
+
+      if (post.wp_post_title) {
+        const cleanTitle = post.wp_post_title.trim();
+        const shortTitle = cleanTitle.substring(0, 35);
+        const crawlHistory = await this.prisma.ztteam_crawl_history.findFirst({
+          where: {
+            OR: [
+              { title: cleanTitle },
+              { title: { contains: shortTitle, mode: 'insensitive' } },
+            ],
+          },
+          orderBy: { created_at: 'desc' },
+        });
+
+        if (crawlHistory && crawlHistory.url && crawlHistory.url.startsWith('http')) {
+          sourceUrl = crawlHistory.url;
+        }
+      }
+
+      /** Nếu không tìm thấy trong crawl_history, kiểm tra wp_post_url có phải website ngoài không */
+      if (!sourceUrl && post.wp_post_url) {
+        const targetSites = await this.prisma.ztteam_target_sites.findMany({ select: { wp_url: true } });
+        const isInternalSite = targetSites.some((s) => {
+          try {
+            return new URL(s.wp_url).hostname.toLowerCase() === new URL(post.wp_post_url!).hostname.toLowerCase();
+          } catch (e) {
+            return false;
+          }
+        });
+        /** Chỉ dùng wp_post_url nếu nó KHÔNG phải website WordPress đích cá nhân */
+        if (!isInternalSite) {
+          sourceUrl = post.wp_post_url;
+        }
+      }
+
+      /** 3. Bóc tách ảnh gốc từ link website nguồn bằng FetcherService */
+      if (sourceUrl) {
+        try {
+          const storyData = await this.fetcherService.ztteam_fetchUrlData(sourceUrl);
+          if (storyData && (storyData.image || (storyData.images && storyData.images.length > 0))) {
+            sourceImageUrl = storyData.image || (storyData.images ? storyData.images[0] : null);
+          }
+        } catch (fetchErr: any) {
+          /** Fallback regex thẻ meta nếu fetchUrlData gặp trở ngại */
+          try {
+            const res = await fetch(sourceUrl, {
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              },
+              signal: AbortSignal.timeout(15000),
+            });
+            if (res.ok) {
+              const html = await res.text();
+              const match =
+                html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                html.match(/<meta\s+name=["']twitter:image["']\s+content=["']([^"']+)["']/i);
+              if (match && match[1]) {
+                sourceImageUrl = match[1];
+              }
+            }
+          } catch (e) {
+            /** Bỏ qua */
+          }
+        }
+      }
+
+      if (!sourceImageUrl) {
+        throw new Error('Không thể tìm thấy link ảnh gốc của bài viết từ website nguồn');
+      }
+
+      /** 4. Tải ảnh gốc từ website nguồn về lưu trữ cục bộ */
+      const axios = require('axios');
+      const writer = fs.createWriteStream(localFilePath);
+
+      const imgRes = await axios({
+        url: sourceImageUrl,
+        method: 'GET',
+        responseType: 'stream',
+        timeout: 30000,
+      });
+      imgRes.data.pipe(writer);
+
+      await new Promise<void>((resolve, reject) => {
+        writer.on('finish', () => resolve());
+        writer.on('error', (err: any) => reject(err));
+      });
+
+      /** Đồng bộ sang output.png và source_original.png để dùng lâu dài */
+      try {
+        fs.copyFileSync(localFilePath, localOutputPath);
+        fs.copyFileSync(localFilePath, localSourceOriginal);
+      } catch (e) {
+        /** Bỏ qua */
+      }
+    }
 
     const newImageUrl = `/storage/images/${id}/original.png`;
 
-    /** 4. Cập nhật bài viết thành COMPLETED và đưa thẳng vào hàng đợi tạo video Reel (PENDING) */
+    /** 5. Cập nhật bài viết thành COMPLETED và đưa thẳng vào hàng đợi tạo video Reel (PENDING) */
     const updated = await this.prisma.ztteam_images.update({
       where: { id },
       data: {

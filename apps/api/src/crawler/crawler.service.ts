@@ -321,6 +321,11 @@ export class ZTTeamCrawlerService {
             },
           });
         }
+
+        /** Lưu bản sao ảnh gốc trực tiếp vào thư mục bài viết để sẵn sàng chuyển đổi */
+        if (sourceBackupLocalPath && fs.existsSync(sourceBackupLocalPath)) {
+          fs.copyFileSync(sourceBackupLocalPath, path.join(targetDir, 'source_original.png'));
+        }
       } catch (copyErr: any) {
         this.logger.warn(`Failed to copy image to standard folder: ${copyErr.message}`);
       }

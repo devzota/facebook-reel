@@ -6,6 +6,7 @@ import { ZTTeamMediaModule } from '../media/media.module';
 import { ZTTeamFacebookModule } from '../facebook/facebook.module';
 import { ZTTeamWordpressModule } from '../wordpress/wordpress.module';
 import { ZTTeamStoryTestModule } from '../story-test/story-test.module';
+import { ZTTeamCrawlerModule } from '../crawler/crawler.module';
 import { ZTTeamImageRenderCron } from './image-render.cron';
 import { ZTTeamImageController } from './image.controller';
 
@@ -16,7 +17,8 @@ import { ZTTeamImageController } from './image.controller';
     ZTTeamMediaModule, 
     ZTTeamFacebookModule,
     ZTTeamWordpressModule,
-    forwardRef(() => ZTTeamStoryTestModule)
+    forwardRef(() => ZTTeamStoryTestModule),
+    forwardRef(() => ZTTeamCrawlerModule),
   ],
   controllers: [ZTTeamImageController],
   providers: [ZTTeamImageProcessor, ZTTeamImageRenderCron],
