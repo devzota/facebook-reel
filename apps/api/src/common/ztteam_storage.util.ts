@@ -25,12 +25,17 @@ export function ztteam_getVideosPath(...subpaths: string[]): string {
   return path.join(ztteam_getStorageRoot(), 'videos', ...subpaths);
 }
 
+export function ztteam_getSourceOriginalsPath(...subpaths: string[]): string {
+  return path.join(ztteam_getStorageRoot(), 'images', 'source-originals', ...subpaths);
+}
+
 export function ztteam_ensureStorageDirs(): void {
   const root = ztteam_getStorageRoot();
   const dirs = [
     root,
     path.join(root, 'reels'),
     path.join(root, 'images'),
+    path.join(root, 'images', 'source-originals'),
     path.join(root, 'templates'),
     path.join(root, 'youtube'),
     path.join(root, 'videos'),

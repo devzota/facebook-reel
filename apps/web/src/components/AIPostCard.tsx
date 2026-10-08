@@ -227,10 +227,17 @@ export default function ZTTeamAIPostCard({
         <div className="w-full aspect-[4/5] bg-black/60 rounded-xl relative overflow-hidden group/media border border-white/5">
           {/** Badges Top Bar */}
           <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none">
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300 shadow-md">
-              <span className="material-symbols-outlined text-xs">auto_awesome</span>
-              ẢNH 2K AI
-            </div>
+            {item.template_id === 'source_original' ? (
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/80 backdrop-blur-md border border-amber-400/30 text-[10px] font-bold text-white shadow-md" title="Đang sử dụng ảnh gốc của bài viết nguồn làm dự phòng">
+                <span className="material-symbols-outlined text-xs">image</span>
+                ẢNH GỐC DỰ PHÒNG
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-[10px] font-bold text-cyan-300 shadow-md">
+                <span className="material-symbols-outlined text-xs">auto_awesome</span>
+                ẢNH 2K AI
+              </div>
+            )}
 
             {item.video_url ? (
               <button

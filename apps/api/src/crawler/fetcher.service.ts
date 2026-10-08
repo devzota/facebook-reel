@@ -2,6 +2,9 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import * as cheerio from "cheerio";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
+import * as fs from 'fs';
+import * as path from 'path';
+import { ztteam_getSourceOriginalsPath } from '../common/ztteam_storage.util';
 
 export interface ZTTeamFetchResult {
   title: string;
@@ -429,6 +432,68 @@ export class ZTTeamFetcherService {
     } catch (e: any) {
       this.logger.error(`Failed to extract article links via proxy: ${e.message}`);
       return [];
+    }
+  }
+
+  /**
+   * ZTTeam: Tải và lưu trữ ảnh gốc từ website nguồn vào ổ cứng VPS làm dự phòng an toàn
+   */
+  async ztteam_downloadAndSaveSourceImage(imageUrl: string, storyTitle: string): Promise<{ localPath: string; storageUrl: string }> {
+    try {
+      const storageDir = ztteam_getSourceOriginalsPath();
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
+      }
+
+      /** Xác định đuôi mở rộng của file ảnh */
+      let ext = 'jpg';
+      try {
+        const u = new URL(imageUrl);
+        const p = u.pathname.toLowerCase();
+        if (p.endsWith('.png')) ext = 'png';
+        else if (p.endsWith('.webp')) ext = 'webp';
+        else if (p.endsWith('.jpeg')) ext = 'jpeg';
+      } catch (e) {
+        /** Mặc định là jpg */
+      }
+
+      const filename = `source_img_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+      const localPath = path.join(storageDir, filename);
+
+      this.logger.log(`Downloading source original image for "${storyTitle}": ${imageUrl}`);
+
+      const response = await fetch(imageUrl, {
+        signal: AbortSignal.timeout(20000),
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status} when downloading image`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      if (buffer.length < 1000) {
+        throw new Error('Downloaded image file is too small or corrupted (< 1KB)');
+      }
+
+      fs.writeFileSync(localPath, buffer);
+
+      const storageUrl = `/storage/images/source-originals/${filename}`;
+      this.logger.log(`Successfully saved source original image: ${storageUrl} (${(buffer.length / 1024).toFixed(1)} KB)`);
+
+      return {
+        localPath,
+        storageUrl,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to download and save source original image from ${imageUrl}: ${err.message}`);
+      throw err;
     }
   }
 }

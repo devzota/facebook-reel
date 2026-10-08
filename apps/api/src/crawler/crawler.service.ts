@@ -65,9 +65,25 @@ export class ZTTeamCrawlerService {
     const cleanContent = this.fetcherService.ztteam_cleanStoryContent(storyData.content);
     const storyTitle = storyData.title.trim();
 
+    /** 1.1 Tải và lưu trữ ảnh gốc từ website nguồn vào ổ cứng VPS làm bản dự phòng an toàn */
+    let sourceBackupImageUrl: string | null = null;
+    let sourceBackupLocalPath: string | null = null;
+    const rawCandidateImage = storyData.image || (storyData.images && storyData.images.length > 0 ? storyData.images[0] : null);
+
+    if (rawCandidateImage) {
+      try {
+        const savedSource = await this.fetcherService.ztteam_downloadAndSaveSourceImage(rawCandidateImage, storyTitle);
+        sourceBackupImageUrl = savedSource.storageUrl;
+        sourceBackupLocalPath = savedSource.localPath;
+      } catch (backupErr: any) {
+        this.logger.warn(`Không thể tải ảnh gốc dự phòng (${rawCandidateImage}): ${backupErr.message}`);
+      }
+    }
+
     /** 2. Xử lý ảnh 2K: Tái sử dụng ảnh đã có hoặc chỉ tạo mới khi chưa có / khi người dùng yêu cầu render lại */
     let image2kUrl = existingImageUrl || '';
     let imageLocalPath = '';
+    let currentTemplateId = 'sangtao_2k';
 
     if (!image2kUrl && !forceRecreate) {
       /** Kiểm tra nếu bài viết này đã từng tạo ảnh trong hệ thống trước đó */
@@ -76,30 +92,45 @@ export class ZTTeamCrawlerService {
           wp_post_title: storyTitle,
           image_url: { not: null }
         },
-        select: { image_url: true }
+        select: { image_url: true, template_id: true }
       });
       if (existingImgRecord && existingImgRecord.image_url) {
         image2kUrl = existingImgRecord.image_url;
+        currentTemplateId = existingImgRecord.template_id || 'sangtao_2k';
       }
     }
 
     if (!image2kUrl || forceRecreate) {
       /** Chỉ khi chưa có ảnh sẵn hoặc người dùng bấm render lại thủ công mới gọi SangTao.ai */
-      this.logger.log(`Analyzing story and generating 2K image via SangTao.ai for "${storyTitle}"...`);
-      const promptData = await this.storyTestService.ztteam_generateStoryImagePrompt(
-        cleanContent,
-        'cinematic',
-        '4:5',
-      );
+      try {
+        this.logger.log(`Analyzing story and generating 2K image via SangTao.ai for "${storyTitle}"...`);
+        const promptData = await this.storyTestService.ztteam_generateStoryImagePrompt(
+          cleanContent,
+          'cinematic',
+          '4:5',
+        );
 
-      const imageResult = await this.storyTestService.ztteam_renderStoryImage({
-        prompt: promptData.image_prompt_en,
-        aspectRatio: '4:5',
-      });
+        const imageResult = await this.storyTestService.ztteam_renderStoryImage({
+          prompt: promptData.image_prompt_en,
+          aspectRatio: '4:5',
+        });
 
-      image2kUrl = imageResult.imageUrl;
-      imageLocalPath = imageResult.localPath;
-      this.logger.log(`SangTao.ai 2K image generated: ${image2kUrl}`);
+        image2kUrl = imageResult.imageUrl;
+        imageLocalPath = imageResult.localPath;
+        currentTemplateId = 'sangtao_2k';
+        this.logger.log(`SangTao.ai 2K image generated: ${image2kUrl}`);
+      } catch (sangTaoErr: any) {
+        this.logger.warn(`SangTao.ai gặp sự cố (${sangTaoErr.message}). Tự động kích hoạt Fallback sang ảnh gốc dự phòng!`);
+        if (sourceBackupImageUrl && sourceBackupLocalPath && fs.existsSync(sourceBackupLocalPath)) {
+          image2kUrl = sourceBackupImageUrl;
+          imageLocalPath = sourceBackupLocalPath;
+          currentTemplateId = 'source_original';
+          this.logger.log(`Đã kích hoạt thành công ảnh gốc dự phòng: ${image2kUrl}`);
+        } else {
+          /** Nếu ngay cả ảnh gốc dự phòng cũng không có thì mới ném lỗi ra ngoài */
+          throw sangTaoErr;
+        }
+      }
     } else {
       this.logger.log(`Reusing existing 2K image (Tiết kiệm 100% chi phí API): ${image2kUrl}`);
       if (image2kUrl.startsWith('/storage/')) {
@@ -246,7 +277,7 @@ export class ZTTeamCrawlerService {
           data: {
             wp_post_title: storyTitle,
             wp_post_url: wpResult.url,
-            template_id: 'sangtao_2k',
+            template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
             ai_first_comment: firstCommentText,
@@ -264,7 +295,7 @@ export class ZTTeamCrawlerService {
             wp_post_id: wpResult.id.toString(),
             wp_post_title: storyTitle,
             wp_post_url: wpResult.url,
-            template_id: 'sangtao_2k',
+            template_id: currentTemplateId,
             image_url: image2kUrl,
             ai_caption: fanpageCaption,
             ai_first_comment: firstCommentText,
