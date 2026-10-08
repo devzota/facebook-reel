@@ -194,8 +194,8 @@ export default function FanpageReport() {
     const finalReach = totalReachFromInsights > 0 ? totalReachFromInsights : postsReachSum;
     const finalEng = totalEngFromInsights > 0 ? totalEngFromInsights : postsEngSum;
 
-    const followers = page?.followersCount || (page as any)?.followers_count || 0;
-    const finalFollowers = followers > 0 ? followers : (newFollowersFromInsights > 0 ? newFollowersFromInsights : 6436);
+    const followers = page?.followersCount ?? (page as any)?.followers_count ?? 0;
+    const finalFollowers = typeof followers === 'number' && !isNaN(followers) ? followers : 0;
 
     /** Tạo mảng chartData trực tiếp từ Facebook Insights */
     let chartList: any[] = [];
@@ -277,14 +277,14 @@ export default function FanpageReport() {
         currentFollowerCounter = item.trueFans;
       } else {
         reversedFollowers[i] = currentFollowerCounter;
-        const dailyChange = item.follows > 0 ? item.follows : Math.max(1, Math.round(finalFollowers * 0.002));
+        const dailyChange = item.follows > 0 ? item.follows : (finalFollowers > 0 ? Math.max(1, Math.round(finalFollowers * 0.002)) : 0);
         currentFollowerCounter = Math.max(0, currentFollowerCounter - dailyChange);
       }
     }
 
     chartList = chartList.map((item, idx) => ({
       ...item,
-      followers: reversedFollowers[idx] || finalFollowers,
+      followers: reversedFollowers[idx] !== undefined ? reversedFollowers[idx] : finalFollowers,
     }));
 
     return {
@@ -501,7 +501,7 @@ export default function FanpageReport() {
 
                   <div className="mt-4">
                     <h3 className="text-4xl font-black text-white tracking-tight">
-                      {metricsData.followers > 0 ? metricsData.followers.toLocaleString() : '6,436'}
+                      {(metricsData.followers ?? 0).toLocaleString()}
                     </h3>
                   </div>
                 </div>

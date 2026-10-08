@@ -148,6 +148,11 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
             <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2 mt-1 text-[11px] font-medium text-fb-text-muted">
               <span className="truncate block">Nick: <b className="text-blue-400">{page.ownerName || 'Admin'}</b></span>
               <span className="hidden sm:inline">•</span>
+              <span className="inline-flex items-center gap-1 text-slate-300 font-semibold truncate">
+                <span className="material-symbols-outlined text-[13px] text-blue-400">group</span>
+                {(page.followersCount ?? 0).toLocaleString()} <span className="text-[10px] text-fb-text-muted font-normal">sub</span>
+              </span>
+              <span className="hidden sm:inline">•</span>
               <span className="text-fb-text-muted text-[10px] sm:text-[11px] truncate block">ID: {page.id}</span>
             </div>
           </div>
@@ -441,6 +446,7 @@ export default function FacebookPages() {
     ztteam_checkLoginStatus,
     ztteam_loginWithFacebook,
     ztteam_fetchPages,
+    ztteam_fetchPagesFromDB,
     ztteam_fetchAccounts,
     ztteam_deleteAccount,
     ztteam_testPost
@@ -507,8 +513,8 @@ export default function FacebookPages() {
       const res = await api.post('/facebook/accounts/check-health');
       if (res.data?.success) {
         ztteam_showToast('Đã kiểm tra xong sức khỏe Token Nick FB & Fanpage!', 'success');
-        ztteam_fetchPages();
-        ztteam_fetchAccounts();
+        await ztteam_fetchPagesFromDB();
+        await ztteam_fetchAccounts();
       }
     } catch (e: any) {
       ztteam_showToast('Lỗi kiểm tra Token Nick FB', 'error');
@@ -522,7 +528,7 @@ export default function FacebookPages() {
       const res = await api.put(`/facebook/pages/${pageId}/toggle-active`, { isActive });
       if (res.data?.success) {
         ztteam_showToast(res.data.message || 'Cập nhật trạng thái Fanpage thành công', 'success');
-        ztteam_fetchPages();
+        await ztteam_fetchPagesFromDB();
       }
     } catch (e: any) {
       ztteam_showToast(e.response?.data?.message || 'Có lỗi xảy ra', 'error');

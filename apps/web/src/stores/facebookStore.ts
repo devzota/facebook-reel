@@ -178,9 +178,10 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
       if (fbAccountId) {
         await api.post(`/facebook/pages/${fbAccountId}/fetch`);
       }
-      await get().ztteam_fetchPagesFromDB();
     } catch (error: any) {
-      set({ error: error.response?.data?.message || 'Failed to fetch pages', isLoading: false });
+      set({ error: error.response?.data?.message || 'Failed to fetch pages' });
+    } finally {
+      await get().ztteam_fetchPagesFromDB();
     }
   },
 

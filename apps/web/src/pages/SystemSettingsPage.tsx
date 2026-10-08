@@ -142,7 +142,7 @@ export default function SystemSettingsPage() {
                       )}
                       <div>
                         <h4 className="text-sm font-bold text-fb-text">{page.name}</h4>
-                        <p className="text-xs text-blue-400 font-bold">ID: {page.id} {page.followersCount ? `• ${page.followersCount} Follower` : ''}</p>
+                        <p className="text-xs text-blue-400 font-bold">ID: {page.id} {page.followersCount !== undefined ? `• ${page.followersCount.toLocaleString()} Follower` : ''}</p>
                       </div>
                     </div>
                     <span className="px-2.5 sm:px-3.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] sm:text-xs font-bold border border-emerald-500/20 flex items-center gap-1.5 shrink-0 whitespace-nowrap">

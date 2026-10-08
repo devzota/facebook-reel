@@ -132,24 +132,30 @@ export class ZTTeamFacebookService {
           pageData.avatar = `https://graph.facebook.com/${page.id}/picture?type=large`;
         }
 
-        let newCount = page.followers_count ?? page.fan_count;
-        if ((newCount === undefined || newCount === 0) && page.id && page.access_token) {
-          try {
-            const directPageRes = await firstValueFrom(
-              this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${page.id}`, {
-                params: { fields: 'followers_count,fan_count', access_token: page.access_token }
-              })
-            );
-            if (directPageRes.data?.followers_count !== undefined || directPageRes.data?.fan_count !== undefined) {
-              newCount = directPageRes.data.followers_count ?? directPageRes.data.fan_count;
+        const fCount1 = Number(page.followers_count) || 0;
+        const fCount2 = Number(page.fan_count) || 0;
+        let newCount = Math.max(fCount1, fCount2);
+
+        if (newCount === 0 && page.id) {
+          const directToken = page.access_token || fbAccount?.user_token_encrypted;
+          if (directToken) {
+            try {
+              const directPageRes = await firstValueFrom(
+                this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${page.id}`, {
+                  params: { fields: 'followers_count,fan_count', access_token: directToken }
+                })
+              );
+              if (directPageRes.data) {
+                const df1 = Number(directPageRes.data.followers_count) || 0;
+                const df2 = Number(directPageRes.data.fan_count) || 0;
+                newCount = Math.max(df1, df2);
+              }
+            } catch (e: any) {
+              /** Bỏ qua nếu fallback lỗi */
             }
-          } catch (e: any) {
-            /** Bỏ qua nếu fallback lỗi */
           }
         }
-        if (newCount !== undefined) {
-          pageData.follower_count = newCount;
-        }
+        pageData.follower_count = newCount;
 
         const existingPage = await this.prisma.ztteam_pages.findFirst({
           where: {
@@ -1247,9 +1253,46 @@ export class ZTTeamFacebookService {
             })
           );
           if (pageRes.data?.followers_count !== undefined || pageRes.data?.fan_count !== undefined) {
-            followerCountFromFb = pageRes.data.followers_count ?? pageRes.data.fan_count;
+            const f1 = Number(pageRes.data.followers_count) || 0;
+            const f2 = Number(pageRes.data.fan_count) || 0;
+            followerCountFromFb = Math.max(f1, f2);
+          }
+
+          /** Thử fallback bằng user token nếu followerCountFromFb vẫn bằng 0 */
+          if (followerCountFromFb === 0 && acc.user_token_encrypted) {
+            try {
+              const userTokenRes = await firstValueFrom(
+                this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${p.fb_page_id}`, {
+                  params: { fields: 'followers_count,fan_count', access_token: acc.user_token_encrypted }
+                })
+              );
+              if (userTokenRes.data?.followers_count !== undefined || userTokenRes.data?.fan_count !== undefined) {
+                const uf1 = Number(userTokenRes.data.followers_count) || 0;
+                const uf2 = Number(userTokenRes.data.fan_count) || 0;
+                followerCountFromFb = Math.max(uf1, uf2);
+              }
+            } catch (uErr: any) {
+              /** Bỏ qua nếu user token không đọc được */
+            }
           }
         } catch (err: any) {
+          /** Thử fallback bằng user_token_encrypted của nick quản lý khi page token lỗi */
+          if (acc.user_token_encrypted) {
+            try {
+              const fbFallbackRes = await firstValueFrom(
+                this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${p.fb_page_id}`, {
+                  params: { fields: 'id,name,followers_count,fan_count', access_token: acc.user_token_encrypted }
+                })
+              );
+              if (fbFallbackRes.data?.followers_count !== undefined || fbFallbackRes.data?.fan_count !== undefined) {
+                const f1 = Number(fbFallbackRes.data.followers_count) || 0;
+                const f2 = Number(fbFallbackRes.data.fan_count) || 0;
+                followerCountFromFb = Math.max(f1, f2);
+              }
+            } catch (fallbackErr: any) {
+              /** Bỏ qua nếu fallback cũng lỗi */
+            }
+          }
           isPageValid = false;
           pageErrorMsg = err.response?.data?.error?.message || err.message;
         }
