@@ -661,10 +661,35 @@ export class ZTTeamImageController {
       return { success: true, hasJob: false };
     }
 
-    /** ZTTeam: Ưu tiên kịch bản an toàn đã được AI tinh chỉnh, nếu chưa có thì làm sạch caption */
-    const storyContent = post.ai_script
-      ? this.ztteam_sanitizePromptForMuse(post.ai_script)
-      : this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
+    /** ZTTeam: Ưu tiên kịch bản an toàn đã có. Nếu chưa có và nội dung gốc nhạy cảm, tự động viết lại trước khi cấp cho Worker */
+    let storyContent = post.ai_script ? this.ztteam_sanitizePromptForMuse(post.ai_script) : '';
+
+    if (!storyContent) {
+      const rawText = post.ai_caption || post.wp_post_title || '';
+      const hasSensitiveThemes = /(divorce|ly\s*hôn|backup|chồng\s*hờ|affair|ngoại\s*tình|mistress|ex-husband|ex-wife|getting\s*divorced|court|lawsuit|kiện\s*tụng|bạo\s*hành|bạo\s*lực)/i.test(rawText);
+
+      if (hasSensitiveThemes) {
+        try {
+          this.logger.log(`Phát hiện nội dung nhạy cảm trong bài #${post.id}, tự động viết lại kịch bản an toàn trước khi cấp cho Worker...`);
+          const safeScript = await this.aiService.ztteam_rewriteSafeStoryForMuse(
+            rawText,
+            'Nội dung chứa chủ đề ly hôn/ngoại tình/kiện tụng. Hãy chuyển hướng sang câu chuyện kịch tính về sự rời đi, bắt đầu cuộc sống mới hoặc tranh chấp hợp đồng bí mật, tuyệt đối không nhắc đến ly hôn, ngoại tình, chồng hờ hay giấy tờ.'
+          );
+          storyContent = this.ztteam_sanitizePromptForMuse(safeScript);
+
+          /** Lưu vào DB để tái sử dụng ngay */
+          await this.prisma.ztteam_images.update({
+            where: { id: post.id },
+            data: { ai_script: storyContent },
+          });
+        } catch (err: any) {
+          this.logger.error(`Tự động viết lại kịch bản an toàn thất bại: ${err.message}`);
+          storyContent = this.ztteam_sanitizePromptForMuse(rawText);
+        }
+      } else {
+        storyContent = this.ztteam_sanitizePromptForMuse(rawText);
+      }
+    }
 
     /** Tạo câu lệnh chuẩn: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
     const prompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${storyContent}`;
@@ -721,13 +746,15 @@ export class ZTTeamImageController {
       [/\bdispute\b/gi, 'negotiation'],
       [/\bweapon(s)?\b/gi, 'gadget'],
       [/\b(getting|get|got|are)?\s*divorce(d)?\b/gi, 'parting ways'],
-      [/\bdivorce\b/gi, 'separation'],
-      [/\bbackup\s*(husband|wife|spouse)\b/gi, 'temporary partner'],
+      [/\bdivorce\b/gi, 'parting ways'],
+      [/\bbackup(\s+\w+)?\b/gi, 'second choice'],
+      [/\b(ex|former\s*partner)\b/gi, 'past acquaintance'],
       [/\baffair(s)?\b/gi, 'secret'],
       [/\bcheat(ed|ing|er|ers)?\b/gi, 'betrayal'],
       [/\bmistress(es)?\b/gi, 'rival'],
-      [/\b(signs?|signed)\s+a\s+(document|agreement|papers?)\b/gi, 'makes a formal decision'],
-      [/\b(divorce\s+papers|divorce\s+agreement)\b/gi, 'written decision'],
+      [/\b(signs?|signed|asking\s+her\s+to\s+sign)\s+(a\s+)?(document|agreement|papers?)\b/gi, 'settles the final decision'],
+      [/\b(document|agreement|papers?)\b/gi, 'decision'],
+      [/\b(divorce\s+papers|divorce\s+agreement)\b/gi, 'written resolution'],
       [/\bdefamation\b/gi, 'dispute'],
       [/\bsue(d|ing)?\b/gi, 'confront'],
     ];

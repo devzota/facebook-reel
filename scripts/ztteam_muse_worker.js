@@ -74,7 +74,7 @@ async function ztteam_processVideoJobOnMuse(job) {
   const localVideoPath = path.join(TEMP_DIR, `job_vid_${job.id}.mp4`);
 
   try {
-    const MAX_RETRIES = 2; /** Tối đa 2 lần tự động khắc phục */
+    const MAX_RETRIES = 1; /** Từ chối tối đa 2 lần (lần đầu + 1 lần tự khắc phục) là dừng lại luôn */
     let attempt = 0;
     let videoRendered = false;
     let base64Data = null;
@@ -101,9 +101,9 @@ async function ztteam_processVideoJobOnMuse(job) {
       const ztteam_openFreshMuseChat = async () => {
         console.log('ℹ️ Tạo phiên trò chuyện Muse.ai mới tinh...');
         await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
-        await new Promise(r => setTimeout(r, 2500));
+        await new Promise(r => setTimeout(r, 2000));
         await page.evaluate(() => {
-          const btn = document.querySelector('button[aria-label="Đoạn chat phụ mới"], button[title="Đoạn chat phụ mới"]');
+          const btn = document.querySelector('button[data-testid="hatch-chat-compose"], button[aria-label="Đoạn chat phụ mới"], button[title="Đoạn chat phụ mới"]');
           if (btn) btn.click();
         });
         await new Promise(r => setTimeout(r, 1500));
@@ -264,7 +264,7 @@ async function ztteam_processVideoJobOnMuse(job) {
               }
             }
 
-            throw new Error(`Muse.ai từ chối sau ${attempt} lần tự khắc phục: ${check.refusalError}`);
+            throw new Error(`Muse.ai từ chối 2 lần liên tiếp: Dừng lại luôn! ("${check.refusalError}")`);
           }
 
           process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | NewBtn: ${check.hasNewBtn ? 'CÓ' : 'Chưa'} | Ready: ${check.isReady ? 'CÓ' : 'Đang chờ...'}`);

@@ -645,7 +645,7 @@ CRITICAL RULES:
 1. ADAPT MUSE'S SUGGESTION:
    - Carefully read Muse's feedback: "${museFeedback}". If Muse suggested a safe alternative direction (e.g. starting a new life, emotional departure, uncovering a secret without mentioning divorce or papers), YOU MUST FULLY EMBRACE AND FOLLOW THAT DIRECTION.
 2. ABSOLUTELY FORBIDDEN WORDS (DO NOT USE ANY OF THESE WORDS OR VARIATIONS):
-   - NO: "divorce", "divorced", "divorcing", "backup husband", "backup spouse", "affair", "cheating", "ex", "ex-husband", "ex-wife", "mistress", "wife", "husband"
+   - NO: "backup", "backup husband", "backup spouse", "divorce", "divorced", "divorcing", "affair", "cheating", "ex", "ex-husband", "ex-wife", "mistress", "wife", "husband"
    - NO: "signed a document", "sign a document", "agreement", "papers", "contract", "lawsuit", "sue", "court", "defamation"
    - NO: "blood", "kill", "murder", "gun", "weapon", "crime", "dead", "corpse", "violence"
 3. HOW TO CONVERT THE CONFLICT SAFELY:
