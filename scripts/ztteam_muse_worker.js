@@ -73,6 +73,7 @@ async function ztteam_processVideoJobOnMuse(job) {
   const localImagePath = path.join(TEMP_DIR, `job_img_${job.id}.png`);
   const localVideoPath = path.join(TEMP_DIR, `job_vid_${job.id}.mp4`);
 
+  try {
     const MAX_RETRIES = 2; /** Tối đa 2 lần tự động khắc phục */
     let attempt = 0;
     let videoRendered = false;
