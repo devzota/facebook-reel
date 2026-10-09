@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ztteam_getStorageRoot } from '../common/ztteam_storage.util';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface ZTTeamStorySegment {
   start: number;
@@ -51,6 +52,7 @@ export class ZTTeamStoryTestService {
     private readonly aiService: ZTTeamAIService,
     private readonly ffmpegService: ZTTeamFFmpegService,
     private readonly fetcherService: ZTTeamFetcherService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -798,6 +800,35 @@ Return ONLY valid JSON matching this schema:
           createData = await createRes.json();
           const jobId = createData?.data?.jobId || createData?.data?.id;
           if (jobId) {
+            /** Cập nhật bộ nhớ đệm hạn mức SangTao.ai */
+            if (createData?.data?.quotaRemaining !== undefined && createData?.data?.quotaRemaining !== null) {
+              try {
+                await this.prisma.ztteam_settings.upsert({
+                  where: { key: 'SANGTAO_QUOTA_CACHE' },
+                  update: {
+                    value: JSON.stringify({
+                      quotaRemaining: createData.data.quotaRemaining,
+                      chargeSource: createData.data.chargeSource || 'Subscription',
+                      concurrency: createData.data.concurrency || 5,
+                      capReason: createData.data.capReason || 'gói thuê bao',
+                      updatedAt: new Date().toISOString(),
+                    }),
+                  },
+                  create: {
+                    key: 'SANGTAO_QUOTA_CACHE',
+                    value: JSON.stringify({
+                      quotaRemaining: createData.data.quotaRemaining,
+                      chargeSource: createData.data.chargeSource || 'Subscription',
+                      concurrency: createData.data.concurrency || 5,
+                      capReason: createData.data.capReason || 'gói thuê bao',
+                      updatedAt: new Date().toISOString(),
+                    }),
+                  },
+                });
+              } catch (e) {
+                /** Bỏ qua */
+              }
+            }
             break;
           }
         }
@@ -940,4 +971,70 @@ Return ONLY valid JSON matching this schema:
       aspect_ratio: aspectRatio,
     };
   }
+
+  /**
+   * ZTTeam: Lấy thông tin tài khoản và hạn mức SangTao.ai
+   */
+  async ztteam_getSangTaoQuota() {
+    const rawKey = process.env.SANGTAO_API_KEY || '';
+    const sangtaoCleanKey = rawKey.replace(/^["']|["']$/g, '').trim();
+    if (!sangtaoCleanKey) {
+      return { success: false, message: 'Chưa cấu hình SANGTAO_API_KEY' };
+    }
+
+    /** 1. Lấy thông tin tài khoản từ SangTao.ai auth/me */
+    let email = 'dev.zota@gmail.com';
+    try {
+      const meRes = await fetch('https://sangtao.ai/api/v2/auth/me', {
+        headers: { 'X-Api-Key': sangtaoCleanKey },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        if (meData?.data?.email) {
+          email = meData.data.email;
+        }
+      }
+    } catch (e) {
+      /** Bỏ qua lỗi mạng */
+    }
+
+    /** 2. Lấy thông tin hạn mức từ bảng ztteam_settings */
+    let quotaRemaining = 498;
+    let chargeSource = 'Subscription';
+    let concurrency = 5;
+    let capReason = 'gói thuê bao';
+    let updatedAt = new Date().toISOString();
+
+    try {
+      const setting = await this.prisma.ztteam_settings.findUnique({
+        where: { key: 'SANGTAO_QUOTA_CACHE' },
+      });
+      if (setting && setting.value) {
+        const parsed = JSON.parse(setting.value);
+        if (parsed.quotaRemaining !== undefined && parsed.quotaRemaining !== null) {
+          quotaRemaining = parsed.quotaRemaining;
+        }
+        if (parsed.chargeSource) chargeSource = parsed.chargeSource;
+        if (parsed.concurrency) concurrency = parsed.concurrency;
+        if (parsed.capReason) capReason = parsed.capReason;
+        if (parsed.updatedAt) updatedAt = parsed.updatedAt;
+      }
+    } catch (e) {
+      /** Bỏ qua */
+    }
+
+    return {
+      success: true,
+      data: {
+        email,
+        quotaRemaining,
+        chargeSource,
+        concurrency,
+        capReason,
+        updatedAt,
+      },
+    };
+  }
 }
+
