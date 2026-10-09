@@ -661,8 +661,10 @@ export class ZTTeamImageController {
       return { success: true, hasJob: false };
     }
 
-    /** ZTTeam: Chuẩn hóa câu chuyện từ caption, lọc từ nhạy cảm và tạo prompt điện ảnh an toàn cho Muse */
-    const storyContent = this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
+    /** ZTTeam: Ưu tiên kịch bản an toàn đã được AI tinh chỉnh, nếu chưa có thì làm sạch caption */
+    const storyContent = post.ai_script
+      ? this.ztteam_sanitizePromptForMuse(post.ai_script)
+      : this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
 
     /** Tạo câu lệnh chuẩn: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
     const prompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${storyContent}`;
@@ -702,7 +704,7 @@ export class ZTTeamImageController {
       text = lines.join('\n');
     }
 
-    /** 3. Bản đồ thay thế các từ ngữ nhạy cảm / bạo lực sang từ ngữ điện ảnh trung lập */
+    /** 3. Bản đồ thay thế các từ ngữ nhạy cảm / bạo lực / ly hôn / ngoại tình sang từ ngữ điện ảnh trung lập */
     const sensitiveMap: [RegExp, string][] = [
       [/\bmafia(\s+boss)?\b/gi, 'powerful boss'],
       [/\bblood(y)?\b/gi, 'tension'],
@@ -718,6 +720,16 @@ export class ZTTeamImageController {
       [/\bcrashed\b/gi, 'halted unexpectedly'],
       [/\bdispute\b/gi, 'negotiation'],
       [/\bweapon(s)?\b/gi, 'gadget'],
+      [/\b(getting|get|got|are)?\s*divorce(d)?\b/gi, 'parting ways'],
+      [/\bdivorce\b/gi, 'separation'],
+      [/\bbackup\s*(husband|wife|spouse)\b/gi, 'temporary partner'],
+      [/\baffair(s)?\b/gi, 'secret'],
+      [/\bcheat(ed|ing|er|ers)?\b/gi, 'betrayal'],
+      [/\bmistress(es)?\b/gi, 'rival'],
+      [/\b(signs?|signed)\s+a\s+(document|agreement|papers?)\b/gi, 'makes a formal decision'],
+      [/\b(divorce\s+papers|divorce\s+agreement)\b/gi, 'written decision'],
+      [/\bdefamation\b/gi, 'dispute'],
+      [/\bsue(d|ing)?\b/gi, 'confront'],
     ];
 
     for (const [regex, replacement] of sensitiveMap) {
