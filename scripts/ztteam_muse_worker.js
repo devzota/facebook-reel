@@ -97,6 +97,11 @@ async function ztteam_processVideoJobOnMuse(job) {
       }
       await page.bringToFront();
 
+      /** Đảm bảo luôn mở phiên trò chuyện Muse.ai mới tinh cho mỗi bài viết */
+      console.log('ℹ️ Mở phiên trò chuyện Muse.ai mới...');
+      await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
+      await new Promise(r => setTimeout(r, 3000));
+
       while (attempt <= MAX_RETRIES && !videoRendered) {
         if (attempt > 0) {
           console.log(`\n========================================================`);
@@ -175,25 +180,18 @@ async function ztteam_processVideoJobOnMuse(job) {
           await new Promise(r => setTimeout(r, 4000));
           const elapsedSec = Math.round((Date.now() - startTime) / 1000);
 
-          const check = await page.evaluate((initialSrcs, initialBtnCount, initialProses) => {
-            /** Kiểm tra nếu có phản hồi từ chối / lỗi từ bot Muse */
-            const currentProses = Array.from(document.querySelectorAll('.prose'));
-            const newProses = currentProses.slice(initialProses);
+          const check = await page.evaluate((initialSrcs, initialBtnCount) => {
+            /** Regex nhận diện toàn diện tất cả các dạng từ chối của Muse.ai */
+            const refusalRegex = /(không|chưa)\s*(tạo|làm|thể|xuất)\s*được|(gửi|đổi|thay)\s*(sang\s*)?(ảnh|nội\s*dung|kịch\s*bản)\s*khác|vi\s*phạm\s*chính\s*sách|vượt\s*ranh\s*giới|không\s*phù\s*hợp|hơi\s*gợi\s*cảm|bạo\s*lực|lỗi\s*tạo\s*video|yêu\s*cầu\s*(thêm\s*)?thông\s*tin/i;
+
+            const allProses = Array.from(document.querySelectorAll('.prose'));
             let refusalError = null;
-            const refusalKeywords = [
-              'không tạo được video',
-              'gửi ảnh khác nhé',
-              'không thể tạo video',
-              'vi phạm chính sách',
-              'nội dung này không phù hợp',
-              'thử lại với ảnh khác',
-              'lỗi tạo video'
-            ];
-            for (const prose of newProses) {
-              const txt = (prose.innerText || '').toLowerCase();
-              const matched = refusalKeywords.find(kw => txt.includes(kw));
-              if (matched) {
-                refusalError = prose.innerText.trim();
+
+            /** Kiểm tra 2 tin nhắn prose gần nhất (tin nhắn mới nhất từ trợ lý Luna) */
+            for (let i = allProses.length - 1; i >= Math.max(0, allProses.length - 2); i--) {
+              const txt = (allProses[i].innerText || '').trim();
+              if (refusalRegex.test(txt)) {
+                refusalError = txt;
                 break;
               }
             }
@@ -226,7 +224,7 @@ async function ztteam_processVideoJobOnMuse(job) {
               hasNewSrc: !!newVideo,
               refusalError,
             };
-          }, initialVideoSrcs, initialDownloadBtnCount, initialProseCount);
+          }, initialVideoSrcs, initialDownloadBtnCount);
 
           if (check.refusalError) {
             console.log(`\n❌ Muse.ai từ chối: "${check.refusalError}"`);
