@@ -1073,6 +1073,7 @@ export class ZTTeamImageController {
       try {
         const originalStory = post.ai_caption || post.wp_post_title || '';
         newStory = await this.aiService.ztteam_rewriteSafeStoryForMuse(originalStory, museMsg);
+        newStory = this.ztteam_sanitizePromptForMuse(newStory);
       } catch (err: any) {
         this.logger.error(`Viết lại kịch bản thất bại: ${err.message}`);
         newStory = this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
