@@ -642,11 +642,12 @@ A video generation request on Muse.ai was REJECTED with this specific refusal me
 Your mission is to rewrite the original story into an engaging, cinematic, and suspenseful 15-second teaser script that will pass Muse's safety filter with 100% certainty.
 
 MANDATORY RULES:
-1. STAY AS CLOSE AS POSSIBLE TO THE ORIGINAL STORY: Keep the exact main characters, the core conflict, the plot twist, and the emotional climax. Do NOT invent an unrelated story.
-2. DIRECTLY SOLVE MUSE'S REFUSAL: Carefully analyze "${museFeedback}". If it flagged violence, weapons, crime, blood, murder, death, suicide, injury, or sensitive themes:
-   - Convert graphic violence into psychological tension, dramatic confrontation, or mysterious discovery.
-   - Replace sensitive words (e.g. kill, corpse, blood, gun, crime) with safe dramatic equivalents (e.g. confrontation, revelation, dark secret, sudden truth).
-3. 100% SAFE (PG-13 / Family-Friendly): Clean language, no policy violations.
+1. STAY AS CLOSE AS POSSIBLE TO THE ORIGINAL STORY: Keep the exact character names, the core tension, the unexpected twist, and the emotional climax.
+2. STRICT COMPLIANCE WITH MUSE.AI SAFETY GUIDELINES:
+   - Muse FORBIDS stories focusing on: DIVORCE / SEPARATION (ly hôn), INFIDELITY / CHEATING / MISTRESS / BACKUP SPOUSE (ngoại tình), LAWSUITS / DEFAMATION (kiện tụng), OR GRAPHIC VIOLENCE / BLOOD (máu me).
+   - If the story is about marriage infidelity, backup spouse, or divorce: Elegantly convert the conflict into an intense family inheritance dispute, a high-stakes corporate/contract rivalry, or a deep personal secret revelation. Keep the character names and the emotional betrayal feeling, but ELIMINATE all mentions of cheating, backup spouse, divorce papers, or marital lawsuits.
+   - If the story is about violence/injury: Convert graphic wounds into psychological suspense, dramatic confrontation, or unexpected revelation.
+3. 100% SAFE (PG-13 / Family-Friendly): Clean, dignified language suitable for mainstream audiences.
 4. FORMAT: Output ONLY the rewritten story text in English (concise 3 to 5 sentences, suitable for video narration), without any prefixes, quotes, explanations, or JSON formatting.`;
 
     try {

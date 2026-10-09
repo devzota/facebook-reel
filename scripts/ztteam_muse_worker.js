@@ -97,10 +97,19 @@ async function ztteam_processVideoJobOnMuse(job) {
       }
       await page.bringToFront();
 
-      /** Đảm bảo luôn mở phiên trò chuyện Muse.ai mới tinh cho mỗi bài viết */
-      console.log('ℹ️ Mở phiên trò chuyện Muse.ai mới...');
-      await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
-      await new Promise(r => setTimeout(r, 3000));
+      /** Hàm mở cuộc trò chuyện Muse.ai mới tinh (Đoạn chat phụ mới) */
+      const ztteam_openFreshMuseChat = async () => {
+        console.log('ℹ️ Tạo phiên trò chuyện Muse.ai mới tinh...');
+        await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
+        await new Promise(r => setTimeout(r, 2500));
+        await page.evaluate(() => {
+          const btn = document.querySelector('button[aria-label="Đoạn chat phụ mới"], button[title="Đoạn chat phụ mới"]');
+          if (btn) btn.click();
+        });
+        await new Promise(r => setTimeout(r, 1500));
+      };
+
+      await ztteam_openFreshMuseChat();
 
       while (attempt <= MAX_RETRIES && !videoRendered) {
         if (attempt > 0) {
@@ -241,14 +250,12 @@ async function ztteam_processVideoJobOnMuse(job) {
 
                 if (fixRes.data && fixRes.data.success) {
                   const { fixedType, imageUrl, prompt } = fixRes.data;
-                  console.log(`✅ VPS đã khắc phục xong (${fixedType === 'IMAGE' ? 'Đã vẽ lại ảnh 2K mới' : 'Đã viết lại kịch bản an toàn'})!`);
+                  console.log(`✅ VPS đã khắc phục xong (${fixedType === 'BOTH' ? 'Vẽ lại ảnh 2K kín đáo & Viết lại kịch bản an toàn' : fixedType === 'IMAGE' ? 'Đã vẽ lại ảnh 2K mới' : 'Đã viết lại kịch bản an toàn'})!`);
                   if (imageUrl) job.imageUrl = imageUrl;
                   if (prompt) job.prompt = prompt;
 
-                  /** Làm mới trang Muse để mở phiên chat sạch */
-                  console.log(`🔄 Đang làm mới tab Muse.ai để gửi lại...`);
-                  await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
-                  await new Promise(r => setTimeout(r, 4000));
+                  /** Mở phiên chat mới hoàn toàn để gửi lại */
+                  await ztteam_openFreshMuseChat();
                   shouldRetryWithFix = true;
                   break; /** Thoát khỏi vòng lặp kiểm tra render để bắt đầu lượt mới */
                 }
