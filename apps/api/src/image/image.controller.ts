@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, UseGuards, Sse, MessageEvent, Header, Delete, Request, UseInterceptors, UploadedFile, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 /** @ts-ignore */
 import { diskStorage } from 'multer';
@@ -13,15 +13,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ztteam_getImagesPath, ztteam_getStorageRoot, ztteam_getVideosPath } from '../common/ztteam_storage.util';
 import { ZTTeamFetcherService } from '../crawler/fetcher.service';
+import { ZTTeamAIService } from '../ai/ai.service';
+import { ZTTeamStoryTestService } from '../story-test/story-test.service';
 
 @Controller('image')
 export class ZTTeamImageController {
+  private readonly logger = new Logger(ZTTeamImageController.name);
+
   constructor(
     private readonly imageProcessor: ZTTeamImageProcessor,
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly facebookService: ZTTeamFacebookService,
     private readonly fetcherService: ZTTeamFetcherService,
+    private readonly aiService: ZTTeamAIService,
+    @Inject(forwardRef(() => ZTTeamStoryTestService))
+    private readonly storyTestService: ZTTeamStoryTestService,
   ) {}
 
   @Sse('events')
@@ -979,5 +986,122 @@ export class ZTTeamImageController {
     this.eventEmitter.emit('image.updated', updated);
 
     return { success: true, post: updated };
+  }
+
+  /**
+   * ZTTeam: Tự động khắc phục khi Muse.ai từ chối render (Ảnh hoặc Nội dung)
+   * POST /api/image/:id/fix-muse-violation
+   */
+  @Post(':id/fix-muse-violation')
+  async ztteam_fixMuseViolation(
+    @Param('id') id: string,
+    @Body() body: { museMessage: string; violationType?: string; retryAttempt?: number },
+  ) {
+    const post = await this.prisma.ztteam_images.findUnique({
+      where: { id },
+    });
+
+    if (!post) {
+      throw new BadRequestException('Không tìm thấy bài viết để khắc phục vi phạm.');
+    }
+
+    const museMsg = (body.museMessage || '').trim();
+    const attempt = body.retryAttempt || 1;
+    const isImageIssue =
+      body.violationType === 'IMAGE' ||
+      /ảnh|hình\s*ảnh|bức\s*ảnh|tấm\s*ảnh|gửi\s*ảnh\s*khác|thử\s*lại\s*với\s*ảnh|image|photo|picture/i.test(museMsg);
+
+    this.logger.warn(`[Muse Fix #${attempt}] Bài #${id} gặp lỗi: "${museMsg}". Phân loại: ${isImageIssue ? 'ẢNH' : 'NỘI DUNG'}`);
+
+    if (isImageIssue) {
+      /** ========== 1. XỬ LÝ LỖI ẢNH: VẼ LẠI ẢNH MỚI 100% ========== */
+      try {
+        const storyContent = post.ai_caption || post.wp_post_title || '';
+        /** Tạo prompt ảnh an toàn mới, dựa trên nội dung câu chuyện gốc */
+        const promptRes = await this.storyTestService.ztteam_generateStoryImagePrompt(
+          storyContent,
+          'cinematic',
+          '4:5',
+        );
+
+        /** Thêm từ khóa an toàn tuyệt đối, trong sáng, tránh bạo lực */
+        const safePrompt = `${promptRes.image_prompt_en}, peaceful cinematic atmosphere, bright warm lighting, family friendly, highly detailed 2K`;
+
+        /** Vẽ ảnh mới qua SangTao.ai 2K (hoặc fallback) */
+        const renderRes = await this.storyTestService.ztteam_renderStoryImage({
+          prompt: safePrompt,
+          aspectRatio: '4:5',
+        });
+
+        const workDir = ztteam_getImagesPath(id);
+        fs.mkdirSync(workDir, { recursive: true });
+        const localOutputPath = path.join(workDir, 'output.png');
+        const localSourceOriginal = path.join(workDir, 'source_original.png');
+
+        /** Copy đè vào thư mục ảnh của bài viết */
+        if (fs.existsSync(renderRes.localPath)) {
+          fs.copyFileSync(renderRes.localPath, localOutputPath);
+          fs.copyFileSync(renderRes.localPath, localSourceOriginal);
+        }
+
+        const newImageUrl = `/storage/images/${id}/output.png?t=${Date.now()}`;
+        const errorLog = `[Tự khắc phục #${attempt}] Muse từ chối ảnh: "${museMsg}". Đã vẽ lại ảnh 2K mới thành công.`;
+
+        /** Cập nhật DB: Giữ nguyên ai_caption của bài viết */
+        const updated = await this.prisma.ztteam_images.update({
+          where: { id },
+          data: {
+            image_url: newImageUrl,
+            error_log: errorLog,
+          },
+        });
+        this.eventEmitter.emit('image.updated', updated);
+
+        const currentStory = post.ai_script || this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
+        const currentPrompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${currentStory}`;
+
+        return {
+          success: true,
+          fixedType: 'IMAGE',
+          imageUrl: newImageUrl,
+          prompt: currentPrompt,
+          message: 'Đã vẽ lại ảnh mới an toàn thành công!',
+        };
+      } catch (err: any) {
+        this.logger.error(`Vẽ lại ảnh thất bại: ${err.message}`);
+        throw new BadRequestException(`Không thể vẽ lại ảnh mới: ${err.message}`);
+      }
+    } else {
+      /** ========== 2. XỬ LÝ LỖI NỘI DUNG: CHO AI VIẾT LẠI KỊCH BẢN AN TOÀN ========== */
+      try {
+        const originalStory = post.ai_caption || post.wp_post_title || '';
+        /** AI viết lại kịch bản dựa trên tin nhắn Muse phản hồi, bám sát nội dung gốc nhất */
+        const safeStory = await this.aiService.ztteam_rewriteSafeStoryForMuse(originalStory, museMsg);
+
+        const newPrompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${safeStory}`;
+        const errorLog = `[Tự khắc phục #${attempt}] Muse từ chối nội dung: "${museMsg}". Đã cho AI viết lại kịch bản an toàn.`;
+
+        /** Cập nhật DB: Lưu kịch bản an toàn vào ai_script, TUYỆT ĐỐI GIỮ NGUYÊN ai_caption để đăng Facebook */
+        const updated = await this.prisma.ztteam_images.update({
+          where: { id },
+          data: {
+            ai_script: safeStory,
+            error_log: errorLog,
+          },
+        });
+        this.eventEmitter.emit('image.updated', updated);
+
+        return {
+          success: true,
+          fixedType: 'CONTENT',
+          imageUrl: post.image_url,
+          prompt: newPrompt,
+          message: 'Đã viết lại kịch bản an toàn thành công!',
+        };
+      } catch (err: any) {
+        this.logger.error(`Viết lại kịch bản thất bại: ${err.message}`);
+        throw new BadRequestException(`Không thể viết lại kịch bản an toàn: ${err.message}`);
+      }
+    }
   }
 }

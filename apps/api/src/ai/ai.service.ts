@@ -623,4 +623,66 @@ YOU MUST RETURN EXACTLY ONE JSON OBJECT WITH THE FOLLOWING STRUCTURE:
       throw new Error('Lỗi khi AI viết lại kịch bản: ' + error.message);
     }
   }
+
+  /**
+   * ZTTeam: Viết lại kịch bản câu chuyện cho Muse.ai khi bị từ chối
+   * Dựa chính xác vào thông báo từ chối của Muse để khắc phục vi phạm,
+   * bám sát nội dung gốc nhất có thể, nhưng chuyển sang phong cách điện ảnh an toàn 100%.
+   */
+  async ztteam_rewriteSafeStoryForMuse(originalContent: string, museFeedback: string): Promise<string> {
+    const settings = await this.getSettings();
+    if (!settings.openaiKey && !settings.geminiKey) {
+      throw new Error('Chưa cấu hình API Key AI (OpenAI hoặc Gemini).');
+    }
+
+    const systemPrompt = `You are an elite Hollywood script doctor and video prompt specialist.
+A video generation request on Muse.ai was REJECTED with this specific refusal message from Muse's safety filter:
+"${museFeedback}"
+
+Your mission is to rewrite the original story into an engaging, cinematic, and suspenseful 15-second teaser script that will pass Muse's safety filter with 100% certainty.
+
+MANDATORY RULES:
+1. STAY AS CLOSE AS POSSIBLE TO THE ORIGINAL STORY: Keep the exact main characters, the core conflict, the plot twist, and the emotional climax. Do NOT invent an unrelated story.
+2. DIRECTLY SOLVE MUSE'S REFUSAL: Carefully analyze "${museFeedback}". If it flagged violence, weapons, crime, blood, murder, death, suicide, injury, or sensitive themes:
+   - Convert graphic violence into psychological tension, dramatic confrontation, or mysterious discovery.
+   - Replace sensitive words (e.g. kill, corpse, blood, gun, crime) with safe dramatic equivalents (e.g. confrontation, revelation, dark secret, sudden truth).
+3. 100% SAFE (PG-13 / Family-Friendly): Clean language, no policy violations.
+4. FORMAT: Output ONLY the rewritten story text in English (concise 3 to 5 sentences, suitable for video narration), without any prefixes, quotes, explanations, or JSON formatting.`;
+
+    try {
+      if (settings.activeProvider === 'gemini' && settings.geminiKey) {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(settings.geminiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash',
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 350,
+          },
+        });
+        const result = await model.generateContent(`${systemPrompt}\n\nORIGINAL STORY:\n"""\n${originalContent}\n"""`);
+        const text = result.response.text();
+        return (text || '').trim();
+      } else {
+        const OpenAI = require('openai').default;
+        const apiKey = (settings.openaiKey || '').trim();
+        const openai = new OpenAI({ apiKey });
+
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `ORIGINAL STORY:\n"""\n${originalContent}\n"""` },
+          ],
+          max_tokens: 350,
+          temperature: 0.7,
+        });
+
+        return response.choices[0]?.message?.content?.trim() || originalContent;
+      }
+    } catch (e: any) {
+      this.logger.error(`Error rewriting safe story for Muse: ${e.message}`);
+      throw new Error(`Lỗi khi AI viết lại kịch bản an toàn: ${e.message}`);
+    }
+  }
 }

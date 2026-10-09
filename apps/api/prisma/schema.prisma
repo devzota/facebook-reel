@@ -234,6 +234,7 @@ model ztteam_images {
   video_url       String?
   video_status    String    @default("NONE") /** NONE, PENDING, COMPLETED, FAILED */
   video_created_at DateTime?
+  ai_script       String?   @db.Text
   ai_caption      String?   @db.Text
   ai_first_comment String?  @db.Text
   status          String    @default("QUEUED") /** QUEUED, RENDERING, COMPLETED, FAILED */
