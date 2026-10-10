@@ -661,35 +661,9 @@ export class ZTTeamImageController {
       return { success: true, hasJob: false };
     }
 
-    /** ZTTeam: Ưu tiên kịch bản an toàn đã có. Nếu chưa có và nội dung gốc nhạy cảm, tự động viết lại trước khi cấp cho Worker */
-    let storyContent = post.ai_script ? this.ztteam_sanitizePromptForMuse(post.ai_script) : '';
-
-    if (!storyContent) {
-      const rawText = post.ai_caption || post.wp_post_title || '';
-      const hasSensitiveThemes = /(divorce|ly\s*hôn|backup|chồng\s*hờ|affair|ngoại\s*tình|mistress|ex-husband|ex-wife|getting\s*divorced|court|lawsuit|kiện\s*tụng|bạo\s*hành|bạo\s*lực)/i.test(rawText);
-
-      if (hasSensitiveThemes) {
-        try {
-          this.logger.log(`Phát hiện nội dung nhạy cảm trong bài #${post.id}, tự động viết lại kịch bản an toàn trước khi cấp cho Worker...`);
-          const safeScript = await this.aiService.ztteam_rewriteSafeStoryForMuse(
-            rawText,
-            'Nội dung chứa chủ đề ly hôn/ngoại tình/kiện tụng. Hãy chuyển hướng sang câu chuyện kịch tính về sự rời đi, bắt đầu cuộc sống mới hoặc tranh chấp hợp đồng bí mật, tuyệt đối không nhắc đến ly hôn, ngoại tình, chồng hờ hay giấy tờ.'
-          );
-          storyContent = this.ztteam_sanitizePromptForMuse(safeScript);
-
-          /** Lưu vào DB để tái sử dụng ngay */
-          await this.prisma.ztteam_images.update({
-            where: { id: post.id },
-            data: { ai_script: storyContent },
-          });
-        } catch (err: any) {
-          this.logger.error(`Tự động viết lại kịch bản an toàn thất bại: ${err.message}`);
-          storyContent = this.ztteam_sanitizePromptForMuse(rawText);
-        }
-      } else {
-        storyContent = this.ztteam_sanitizePromptForMuse(rawText);
-      }
-    }
+    /** ZTTeam: Lấy trực tiếp nội dung caption hoặc title làm kịch bản video nguyên bản */
+    const rawText = post.ai_caption || post.wp_post_title || '';
+    const storyContent = this.ztteam_sanitizePromptForMuse(rawText);
 
     /** Tạo câu lệnh chuẩn: Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại */
     const prompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${storyContent}`;
@@ -1027,109 +1001,5 @@ export class ZTTeamImageController {
     return { success: true, post: updated };
   }
 
-  /**
-   * ZTTeam: Tự động khắc phục khi Muse.ai từ chối render (Ảnh hoặc Nội dung)
-   * POST /api/image/:id/fix-muse-violation
-   */
-  @Post(':id/fix-muse-violation')
-  async ztteam_fixMuseViolation(
-    @Param('id') id: string,
-    @Body() body: { museMessage: string; violationType?: string; retryAttempt?: number },
-  ) {
-    const post = await this.prisma.ztteam_images.findUnique({
-      where: { id },
-    });
 
-    if (!post) {
-      throw new BadRequestException('Không tìm thấy bài viết để khắc phục vi phạm.');
-    }
-
-    const museMsg = (body.museMessage || '').trim();
-    const attempt = body.retryAttempt || 1;
-
-    const hasImageIssue =
-      body.violationType === 'IMAGE' ||
-      /ảnh|hình\s*ảnh|bức\s*ảnh|tấm\s*ảnh|gửi\s*ảnh\s*khác|đổi\s*sang\s*ảnh|thử\s*lại\s*với\s*ảnh|gợi\s*cảm|trang\s*phục|bối\s*cảnh|image|photo|picture/i.test(museMsg);
-
-    const hasContentIssue =
-      body.violationType === 'CONTENT' ||
-      /nội\s*dung|kịch\s*bản|câu\s*chuyện|từ\s*ngữ|kiện\s*tụng|tan\s*vỡ|ly\s*hôn|ngoại\s*tình|chảy\s*máu|bạo\s*lực|án\s*mạng|vượt\s*ranh\s*giới|vi\s*phạm\s*chính\s*sách|content|text|script|story|policy/i.test(museMsg) ||
-      !hasImageIssue; /** Mặc định nếu không phát hiện rõ thì xử lý nội dung */
-
-    this.logger.warn(`[Muse Fix #${attempt}] Bài #${id} gặp lỗi: "${museMsg}". Phân loại: Ảnh=${hasImageIssue}, Nội dung=${hasContentIssue}`);
-
-    let newImageUrl = post.image_url;
-    let newStory = post.ai_script || '';
-
-    /** ========== 1. XỬ LÝ ẢNH NẾU MUSE YÊU CẦU ĐỔI ẢNH ========== */
-    if (hasImageIssue) {
-      try {
-        const storyContent = post.ai_caption || post.wp_post_title || '';
-        const promptRes = await this.storyTestService.ztteam_generateStoryImagePrompt(
-          storyContent,
-          'cinematic',
-          '4:5',
-        );
-
-        /** Thêm từ khóa trang phục kín đáo, bối cảnh tối giản, an toàn tuyệt đối */
-        const safePrompt = `${promptRes.image_prompt_en}, modest elegant clothing, minimal clean indoor setting, peaceful cinematic lighting, family friendly, highly detailed 2K`;
-
-        const renderRes = await this.storyTestService.ztteam_renderStoryImage({
-          prompt: safePrompt,
-          aspectRatio: '4:5',
-        });
-
-        const workDir = ztteam_getImagesPath(id);
-        fs.mkdirSync(workDir, { recursive: true });
-        const localOutputPath = path.join(workDir, 'output.png');
-        const localSourceOriginal = path.join(workDir, 'source_original.png');
-
-        if (fs.existsSync(renderRes.localPath)) {
-          fs.copyFileSync(renderRes.localPath, localOutputPath);
-          fs.copyFileSync(renderRes.localPath, localSourceOriginal);
-        }
-
-        newImageUrl = `/storage/images/${id}/output.png?t=${Date.now()}`;
-      } catch (err: any) {
-        this.logger.error(`Vẽ lại ảnh thất bại: ${err.message}`);
-      }
-    }
-
-    /** ========== 2. XỬ LÝ NỘI DUNG NẾU MUSE YÊU CẦU ĐỔI NỘI DUNG ========== */
-    if (hasContentIssue) {
-      try {
-        const originalStory = post.ai_caption || post.wp_post_title || '';
-        newStory = await this.aiService.ztteam_rewriteSafeStoryForMuse(originalStory, museMsg);
-        newStory = this.ztteam_sanitizePromptForMuse(newStory);
-      } catch (err: any) {
-        this.logger.error(`Viết lại kịch bản thất bại: ${err.message}`);
-        newStory = this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
-      }
-    } else if (!newStory) {
-      newStory = this.ztteam_sanitizePromptForMuse(post.ai_caption || post.wp_post_title || '');
-    }
-
-    const newPrompt = `Dựa vào hình ảnh đính kèm, và nội dung dưới đây, hãy tạo 1 video đúng với nội dung hiện tại:\n\n${newStory}`;
-    const fixedType = hasImageIssue && hasContentIssue ? 'BOTH' : hasImageIssue ? 'IMAGE' : 'CONTENT';
-    const errorLog = `[Tự khắc phục #${attempt}] Muse từ chối: "${museMsg}". Đã ${fixedType === 'BOTH' ? 'vẽ lại ảnh 2K kín đáo & viết lại kịch bản an toàn' : fixedType === 'IMAGE' ? 'vẽ lại ảnh 2K kín đáo' : 'viết lại kịch bản an toàn'}.`;
-
-    /** Cập nhật DB: Lưu kịch bản an toàn vào ai_script, TUYỆT ĐỐI GIỮ NGUYÊN ai_caption để đăng Facebook */
-    const updated = await this.prisma.ztteam_images.update({
-      where: { id },
-      data: {
-        image_url: newImageUrl,
-        ai_script: newStory,
-        error_log: errorLog,
-      },
-    });
-    this.eventEmitter.emit('image.updated', updated);
-
-    return {
-      success: true,
-      fixedType,
-      imageUrl: newImageUrl,
-      prompt: newPrompt,
-      message: `Đã tự khắc phục thành công (${fixedType})!`,
-    };
-  }
 }

@@ -10,7 +10,7 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 
-/** Danh sách các hệ thống VPS được phục vụ */
+/** Danh sách các hệ thống VPS được phục vụ luân phiên */
 const VPS_TARGETS = [
   { id: 'auto_ztteam', name: 'auto.ztteam.site', url: process.env.AUTO_ZTTEAM_URL || 'http://169.58.122.248:3000' },
   { id: 'didinao',     name: 'reel.didinao.com', url: process.env.DIDINAO_URL     || 'http://169.58.122.248:3001' },
@@ -90,10 +90,9 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       defaultViewport: null,
     });
 
-    let page;
     try {
       const pages = await browser.pages();
-      page = pages.find(p => p.url().includes('muse.ai'));
+      let page = pages.find(p => p.url().includes('muse.ai'));
       if (!page) {
         console.log('ℹ️ Mở tab Muse.ai mới...');
         page = await browser.newPage();
@@ -101,14 +100,8 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       }
       await page.bringToFront();
 
-      /** Mở phiên trò chuyện Muse.ai mới tinh để tránh bị trộn prompt cũ */
-      console.log('ℹ️ Chuẩn bị phiên trò chuyện Muse.ai mới...');
-      await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
-      await new Promise(r => setTimeout(r, 2000));
-      await page.evaluate(() => {
-        const btn = document.querySelector('button[data-testid="hatch-chat-compose"], button[aria-label="Đoạn chat phụ mới"], button[title="Đoạn chat phụ mới"]');
-        if (btn) btn.click();
-      });
+      /** Chờ khung nhập liệu sẵn sàng */
+      await page.waitForSelector('textarea', { timeout: 15000 });
       await new Promise(r => setTimeout(r, 1500));
 
       /** Tải ảnh hiện tại của job từ VPS về máy tính */
@@ -129,6 +122,8 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       const initialDownloadBtnCount = await page.evaluate(() => {
         return document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
       });
+
+      console.log(`🔍 Video hiện có trên Muse: ${initialVideoSrcs.length} | Nút tải: ${initialDownloadBtnCount}`);
 
       /** 2. Upload ảnh đính kèm */
       console.log(`📤 Đang đính kèm ảnh vào khung chat Muse.ai...`);
@@ -167,9 +162,9 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         await page.keyboard.press('Enter');
       }
 
-      /** 4. Chờ Muse.ai render xong video 15s (Chỉ chờ kết quả video, tuyệt đối không gửi thêm tin nhắn nào) */
+      /** 4. Chờ Muse.ai render xong video 15s */
       const timeoutMs = 420000; /** 7 phút tối đa */
-      console.log(`⏳ [2/4] Đang chờ Muse.ai render video (tối đa 7 phút)...`);
+      console.log(`⏳ [2/4] Đang chờ Muse.ai render video mới (tối đa 7 phút)...`);
       const startTime = Date.now();
 
       while (Date.now() - startTime < timeoutMs) {
@@ -177,6 +172,27 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         const elapsedSec = Math.round((Date.now() - startTime) / 1000);
 
         const check = await page.evaluate((initialSrcs, initialBtnCount) => {
+          /** Kiểm tra từ chối */
+          const refusalKeywords = [
+            'không tạo được video',
+            'gửi ảnh khác nhé',
+            'không thể tạo video',
+            'vi phạm chính sách',
+            'nội dung này không phù hợp',
+            'thử lại với ảnh khác',
+            'lỗi tạo video'
+          ];
+          const proses = Array.from(document.querySelectorAll('.prose, [data-message-author-role="assistant"]'));
+          let refusalError = null;
+          for (const prose of proses.slice(-3)) {
+            const txt = (prose.innerText || '').toLowerCase();
+            const matched = refusalKeywords.find(kw => txt.includes(kw));
+            if (matched) {
+              refusalError = prose.innerText.trim();
+              break;
+            }
+          }
+
           const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
             const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
             return !isAvatar;
@@ -185,31 +201,35 @@ async function ztteam_processVideoJobOnMuse(job, target) {
           const currentBtnCount = document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
           const hasNewBtn = currentBtnCount > initialBtnCount;
 
-          /** Kiểm tra video mới có src khác với lúc đầu */
+          /** BẮT BUỘC: Phải có video mới có src khác với toàn bộ video ban đầu */
           const newVideo = contentVideos.find(v => v.src && !initialSrcs.includes(v.src));
-          const lastVideo = contentVideos[contentVideos.length - 1];
 
-          /** Kiểm tra text thông báo hoàn tất từ trợ lý */
-          const bodyText = document.body.innerText || '';
-          const hasCompletionText = bodyText.includes('Xong video 15s') || bodyText.includes('Đã xuất video 15s') || bodyText.includes('video 15s');
-
-          /** Điều kiện hoàn tất */
-          const isReady = (hasNewBtn && lastVideo && lastVideo.src) ||
-                          (newVideo && (newVideo.duration > 3 || newVideo.readyState >= 2 || newVideo.src.startsWith('blob:'))) ||
-                          (hasCompletionText && lastVideo && lastVideo.src && !initialSrcs.includes(lastVideo.src));
+          /** Chỉ xem là xong khi thực sự có video MỚI xuất hiện */
+          const isReady = newVideo && (
+            hasNewBtn ||
+            newVideo.duration > 3 ||
+            newVideo.readyState >= 2 ||
+            newVideo.src.startsWith('blob:')
+          );
 
           return {
             isReady: !!isReady,
             count: contentVideos.length,
             hasNewBtn,
-            hasNewSrc: !!newVideo,
+            hasNewVideo: !!newVideo,
+            refusalError,
           };
         }, initialVideoSrcs, initialDownloadBtnCount);
 
-        process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | Nút tải mới: ${check.hasNewBtn ? 'CÓ' : 'Chưa'} | Trạng thái: ${check.isReady ? 'HOÀN TẤT' : 'Đang chờ...'}`);
+        if (check.refusalError) {
+          console.log(`\n❌ Muse.ai từ chối: "${check.refusalError}"`);
+          throw new Error(`Muse.ai từ chối: ${check.refusalError}`);
+        }
+
+        process.stdout.write(`\r   ⏱️ Đang render: ${elapsedSec}s | Video count: ${check.count} | Video mới: ${check.hasNewVideo ? 'CÓ' : 'Chưa'} | Trạng thái: ${check.isReady ? 'HOÀN TẤT' : 'Đang chờ...'}`);
 
         if (check.isReady) {
-          console.log(`\n🎉 Muse.ai đã render xong video sau ${elapsedSec} giây!`);
+          console.log(`\n🎉 Muse.ai đã render xong video mới sau ${elapsedSec} giây!`);
           videoRendered = true;
           break;
         }
@@ -219,19 +239,20 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         throw new Error('Quá thời gian chờ render trên Muse.ai (timeout 7 phút)');
       }
 
-      /** Chờ 3s để stream ổn định */
+      /** Chờ 3s để stream hoàn tất */
       await new Promise(r => setTimeout(r, 3000));
 
-      /** 5. Trích xuất dữ liệu video blob */
-      console.log(`💾 [3/4] Đang trích xuất dữ liệu video MP4...`);
-      base64Data = await page.evaluate(async () => {
+      /** 5. Trích xuất dữ liệu video blob mới */
+      console.log(`💾 [3/4] Đang trích xuất dữ liệu video MP4 mới...`);
+      base64Data = await page.evaluate(async (initialSrcs) => {
         const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
           const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
           return !isAvatar && v.src;
         });
         if (contentVideos.length === 0) return null;
 
-        const target = contentVideos[contentVideos.length - 1];
+        /** BẮT BUỘC CHỈ LẤY VIDEO CÓ SRC MỚI */
+        const target = contentVideos.find(v => !initialSrcs.includes(v.src));
         if (!target || !target.src) return null;
 
         const res = await fetch(target.src);
@@ -241,15 +262,15 @@ async function ztteam_processVideoJobOnMuse(job, target) {
           reader.onloadend = () => resolve(reader.result);
           reader.readAsDataURL(blob);
         });
-      });
+      }, initialVideoSrcs);
 
       if (!base64Data || !base64Data.startsWith('data:')) {
-        throw new Error('Không đọc được dữ liệu video stream từ Muse.ai');
+        throw new Error('Không đọc được dữ liệu video stream mới từ Muse.ai');
       }
 
       const buffer = Buffer.from(base64Data.split(',')[1], 'base64');
       fs.writeFileSync(localVideoPath, buffer);
-      console.log(`✅ Đã lưu file video MP4: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`✅ Đã lưu file video MP4 mới: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     } finally {
       if (browser) browser.disconnect();
     }
@@ -337,7 +358,7 @@ console.log('📋 Danh sách hệ thống phục vụ luân phiên:');
 VPS_TARGETS.forEach(t => console.log(`   - ${t.name}: ${t.url}`));
 console.log(`🖥️ Chrome Target : ${CHROME_DEBUG_URL}`);
 console.log(`⏱️ Chu kỳ kiểm tra: mỗi ${POLL_INTERVAL_MS / 1000}s`);
-console.log('🛡️ Cơ chế: Gửi prompt 1 lần duy nhất, chống spam lặp tin nhắn 100%');
+console.log('🛡️ Cơ chế: Nguyên bản ổn định, chống trùng lặp video cũ 100%');
 console.log('========================================================\n');
 
 /** Chạy ngay lần đầu và duy trì chu kỳ polling */
