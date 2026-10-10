@@ -112,7 +112,7 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       await ztteam_downloadFile(job.imageUrl, localImagePath, target.url);
       console.log(`✅ Đã lưu ảnh tạm tại: ${localImagePath}`);
 
-      /** Ghi nhận danh sách các video stream và nút download hiện có trước khi gửi prompt */
+      /** Ghi nhận danh sách các video stream, nút download và số lượng tin nhắn hiện có trước khi gửi prompt */
       const initialStats = await page.evaluate(() => {
         const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
           const isAvatar = v.closest('.rounded-full') !== null || (v.videoWidth === 480 && v.videoHeight === 480);
@@ -120,14 +120,16 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         });
         const downloadBtns = document.querySelectorAll('button[aria-label="Tải video xuống"]').length;
         const srcs = contentVideos.map(v => v.src).filter(Boolean);
+        const proseCount = document.querySelectorAll('.prose, [data-message-author-role="assistant"]').length;
         return {
           count: contentVideos.length,
           downloadBtns,
           srcs,
+          proseCount,
         };
       });
 
-      console.log(`🔍 Trạng thái ban đầu trên Muse: ${initialStats.count} video | ${initialStats.downloadBtns} nút tải`);
+      console.log(`🔍 Trạng thái ban đầu trên Muse: ${initialStats.count} video | ${initialStats.downloadBtns} nút tải | ${initialStats.proseCount} tin nhắn trợ lý`);
 
       /** 2. Upload ảnh đính kèm */
       console.log(`📤 Đang đính kèm ảnh vào khung chat Muse.ai...`);
@@ -176,7 +178,7 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         const elapsedSec = Math.round((Date.now() - startTime) / 1000);
 
         const check = await page.evaluate((initialData) => {
-          /** Kiểm tra từ chối */
+          /** Chỉ kiểm tra các tin nhắn trợ lý MỚI xuất hiện sau khi gửi prompt */
           const refusalKeywords = [
             'không tạo được video',
             'gửi ảnh khác nhé',
@@ -186,9 +188,10 @@ async function ztteam_processVideoJobOnMuse(job, target) {
             'thử lại với ảnh khác',
             'lỗi tạo video'
           ];
-          const proses = Array.from(document.querySelectorAll('.prose, [data-message-author-role="assistant"]'));
+          const allProses = Array.from(document.querySelectorAll('.prose, [data-message-author-role="assistant"]'));
+          const newProses = allProses.slice(initialData.proseCount);
           let refusalError = null;
-          for (const prose of proses.slice(-3)) {
+          for (const prose of newProses) {
             const txt = (prose.innerText || '').toLowerCase();
             const matched = refusalKeywords.find(kw => txt.includes(kw));
             if (matched) {
