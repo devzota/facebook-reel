@@ -94,7 +94,13 @@ export class ZTTeamFacebookService {
 
   async ztteam_fetchPages(fbAccountId: string, userId: string) {
     const fbAccount = await this.prisma.ztteam_fb_accounts.findFirst({
-      where: { fb_user_id: fbAccountId, owner_user_id: userId }
+      where: {
+        owner_user_id: userId,
+        OR: [
+          { id: fbAccountId },
+          { fb_user_id: fbAccountId },
+        ],
+      },
     });
 
     if (!fbAccount) {
