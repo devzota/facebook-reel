@@ -112,8 +112,61 @@ export class ZTTeamFacebookService {
           }
         })
       );
+      let pages = Array.isArray(response.data?.data) ? [...response.data.data] : [];
 
-      const pages = response.data.data;
+      /**
+       * ZTTeam: Fallback nạp Fanpage New Page Experience / Meta Business Suite
+       * Khi GET /me/accounts trả về thiếu trang mà người dùng đã cấp quyền,
+       * ta quét danh sách target_ids từ Facebook debug_token và truy vấn trực tiếp /{page_id}.
+       */
+      try {
+        const appId = process.env.FB_APP_ID || '';
+        const appSecret = process.env.FB_APP_SECRET || '';
+        if (appId && appSecret) {
+          const debugRes = await firstValueFrom(
+            this.httpService.get(`https://graph.facebook.com/debug_token`, {
+              params: {
+                input_token: fbAccount.user_token_encrypted,
+                access_token: `${appId}|${appSecret}`,
+              }
+            })
+          );
+          const granularScopes = debugRes.data?.data?.granular_scopes || [];
+          const targetIdsSet = new Set<string>();
+          for (const gs of granularScopes) {
+            if (Array.isArray(gs.target_ids)) {
+              for (const tid of gs.target_ids) {
+                targetIdsSet.add(tid);
+              }
+            }
+          }
+
+          const existingIds = new Set(pages.map((p: any) => p.id));
+          for (const targetId of targetIdsSet) {
+            if (!existingIds.has(targetId)) {
+              try {
+                const singlePageRes = await firstValueFrom(
+                  this.httpService.get(`https://graph.facebook.com/${this.API_VERSION}/${targetId}`, {
+                    params: {
+                      access_token: fbAccount.user_token_encrypted,
+                      fields: 'id,name,picture.type(large),category,followers_count,fan_count,access_token',
+                    }
+                  })
+                );
+                if (singlePageRes.data && singlePageRes.data.access_token) {
+                  pages.push(singlePageRes.data);
+                  existingIds.add(targetId);
+                  this.logger.log(`ZTTeam: Đã nạp thành công Fanpage New Page Experience: ${singlePageRes.data.name} (${targetId})`);
+                }
+              } catch (singleErr: any) {
+                this.logger.warn(`Không thể nạp Fanpage targetId ${targetId}: ${singleErr.response?.data?.error?.message || singleErr.message}`);
+              }
+            }
+          }
+        }
+      } catch (debugErr: any) {
+        this.logger.warn(`Lỗi khi quét target_ids từ debug_token: ${debugErr.message}`);
+      }
 
       /**
        * CHỈ update các trường lấy từ Facebook API (name, avatar, category, token, follower_count).

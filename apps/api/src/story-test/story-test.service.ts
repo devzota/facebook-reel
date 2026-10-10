@@ -999,29 +999,45 @@ Return ONLY valid JSON matching this schema:
       /** Bỏ qua lỗi mạng */
     }
 
-    /** 2. Lấy thông tin hạn mức từ bảng ztteam_settings */
-    let quotaRemaining = 498;
+    /** 2. Lấy thông tin hạn mức trực tiếp thời gian thực từ SangTao.ai /account/subscription */
+    let quotaRemaining = 486;
     let chargeSource = 'Subscription';
     let concurrency = 5;
     let capReason = 'gói thuê bao';
     let updatedAt = new Date().toISOString();
 
     try {
-      const setting = await this.prisma.ztteam_settings.findUnique({
-        where: { key: 'SANGTAO_QUOTA_CACHE' },
+      const subRes = await fetch('https://sangtao.ai/api/v2/account/subscription', {
+        headers: { 'X-Api-Key': sangtaoCleanKey },
+        signal: AbortSignal.timeout(5000),
       });
-      if (setting && setting.value) {
-        const parsed = JSON.parse(setting.value);
-        if (parsed.quotaRemaining !== undefined && parsed.quotaRemaining !== null) {
-          quotaRemaining = parsed.quotaRemaining;
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        const sub = subData?.data?.subscription;
+        if (sub) {
+          if (sub.maxConcurrentJobs) concurrency = sub.maxConcurrentJobs;
+          if (sub.tier) capReason = `Gói thuê bao (${sub.tier})`;
+          const imgQuota = sub.quotas?.find((q: any) => q.capability === 'chatgpt-image') || sub.quotas?.[0];
+          if (imgQuota && imgQuota.remaining !== undefined) {
+            quotaRemaining = imgQuota.remaining;
+          }
         }
-        if (parsed.chargeSource) chargeSource = parsed.chargeSource;
-        if (parsed.concurrency) concurrency = parsed.concurrency;
-        if (parsed.capReason) capReason = parsed.capReason;
-        if (parsed.updatedAt) updatedAt = parsed.updatedAt;
       }
-    } catch (e) {
-      /** Bỏ qua */
+    } catch (subErr) {
+      /** Fallback đọc từ cache DB nếu API SangTao chập chờn */
+      try {
+        const setting = await this.prisma.ztteam_settings.findUnique({
+          where: { key: 'SANGTAO_QUOTA_CACHE' },
+        });
+        if (setting && setting.value) {
+          const parsed = JSON.parse(setting.value);
+          if (parsed.quotaRemaining !== undefined) quotaRemaining = parsed.quotaRemaining;
+          if (parsed.concurrency) concurrency = parsed.concurrency;
+          if (parsed.capReason) capReason = parsed.capReason;
+        }
+      } catch (dbErr) {
+        /** Bỏ qua */
+      }
     }
 
     return {
