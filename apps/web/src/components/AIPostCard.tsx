@@ -553,7 +553,7 @@ export default function ZTTeamAIPostCard({
             </button>
           )}
 
-          {isCompleted && !item.video_url && item.video_status !== 'PENDING' && onQueueVideo && (
+          {!isAlreadyPosted && isCompleted && !item.video_url && item.video_status !== 'PENDING' && onQueueVideo && (
             <button
               type="button"
               onClick={() => onQueueVideo(item)}

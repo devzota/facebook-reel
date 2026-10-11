@@ -618,10 +618,11 @@ export class ZTTeamImageController {
    */
   @Get('pending-video')
   async ztteam_getPendingVideo(@Query('auto') auto?: string) {
-    /** 1. Ưu tiên bài viết được đánh dấu PENDING thuộc Fanpage có cài đặt Reel hoặc Mixed */
+    /** 1. Ưu tiên bài viết được đánh dấu PENDING thuộc Fanpage có cài đặt Reel hoặc Mixed (chỉ lấy bài CHƯA đăng) */
     let post = await this.prisma.ztteam_images.findFirst({
       where: {
         status: 'COMPLETED',
+        is_posted: false,
         image_url: { not: null },
         video_status: 'PENDING',
         page: {
@@ -632,11 +633,12 @@ export class ZTTeamImageController {
       orderBy: { updated_at: 'asc' },
     });
 
-    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video (Chỉ lấy NONE, tuyệt đối không lấy FAILED để tránh vòng lặp) */
+    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video (Chỉ lấy bài CHƯA đăng, trạng thái NONE) */
     if (!post && auto === 'true') {
       post = await this.prisma.ztteam_images.findFirst({
         where: {
           status: 'COMPLETED',
+          is_posted: false,
           image_url: { not: null },
           video_url: null,
           video_status: 'NONE',
@@ -761,6 +763,11 @@ export class ZTTeamImageController {
       throw new Error(`Không tìm thấy bài viết ${id}`);
     }
 
+    /** Chặn tuyệt đối: Nếu bài viết đã đăng lên Facebook thì không cho tạo video nữa */
+    if (post.is_posted || post.status === 'POSTED') {
+      throw new BadRequestException('Bài viết này đã được đăng lên Facebook, không thể đưa vào hàng đợi tạo video nữa.');
+    }
+
     const updated = await this.prisma.ztteam_images.update({
       where: { id },
       data: { video_status: 'PENDING', error_log: null },
@@ -834,6 +841,11 @@ export class ZTTeamImageController {
 
     if (!post) {
       throw new Error(`Không tìm thấy bài viết ${id}`);
+    }
+
+    /** Chặn tuyệt đối: Nếu bài viết đã đăng lên Facebook thì không cho tạo video nữa */
+    if (post.is_posted || post.status === 'POSTED') {
+      throw new BadRequestException('Bài viết này đã được đăng lên Facebook, không thể tạo lại video nữa.');
     }
 
     const itemDir = path.join(ztteam_getImagesPath(), id);
