@@ -73,6 +73,226 @@ export class ZTTeamFetcherService {
     }
   }
 
+  /**
+   * ZTTeam: Kiểm tra thông minh URL có phải là bài viết đơn lẻ (Single Story Article) thực sự hay không.
+   * Loại trừ hoàn toàn: Trang chủ, chuyên mục (/c/, /category/), thẻ tag, tác giả, phân trang, feed, và các trang tĩnh.
+   */
+  ztteam_isArticleUrl(candidateUrl: string, baseDomain: string): boolean {
+    try {
+      const u = new URL(candidateUrl);
+      
+      /** 1. Bắt buộc cùng hostname hoặc là subdomain của baseDomain */
+      const candHost = u.hostname.toLowerCase();
+      const baseHost = baseDomain.toLowerCase();
+      if (candHost !== baseHost && !candHost.endsWith(`.${baseHost}`)) {
+        return false;
+      }
+
+      let path = u.pathname.trim();
+      if (!path || path === '/' || path === '') {
+        return false;
+      }
+
+      /** Chuẩn hóa: loại bỏ trailing slash */
+      const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+      const pathLower = normalizedPath.toLowerCase();
+
+      /** 2. Danh sách đen tiền tố và thành phần URL không phải bài viết */
+      const nonArticleKeywords = [
+        '/category/',
+        '/categories/',
+        '/c/',
+        '/cat/',
+        '/chuyen-muc/',
+        '/danh-muc/',
+        '/the-loai/',
+        '/tag/',
+        '/tags/',
+        '/the/',
+        '/topic/',
+        '/topics/',
+        '/label/',
+        '/keyword/',
+        '/sections/',
+        '/section/',
+        '/author/',
+        '/tac-gia/',
+        '/user/',
+        '/profile/',
+        '/members/',
+        '/page/',
+        '/p/',
+        '/feed',
+        '/rss',
+        '/atom',
+        '/archive',
+        '/archives/',
+        '/search',
+        '/all/',
+        '/about',
+        '/contact',
+        '/privacy',
+        '/terms',
+        '/disclaimer',
+        '/policy',
+        '/dmca',
+        '/sitemap',
+        '/faq',
+        '/advertise',
+        '/advertising',
+        '/quang-cao',
+        '/lien-he',
+        '/gioi-thieu',
+        '/wp-admin',
+        '/wp-login',
+        '/wp-content',
+        '/wp-includes',
+        '/admin',
+        '/login',
+        '/register',
+        '/signup',
+        '/cart',
+        '/checkout',
+        '/my-account'
+      ];
+
+      for (const keyword of nonArticleKeywords) {
+        if (pathLower.includes(keyword) || pathLower.endsWith(keyword.replace(/\/$/, ''))) {
+          return false;
+        }
+      }
+
+      /** 3. Loại trừ các file tĩnh / media */
+      const staticExtensions = [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico',
+        '.mp4', '.mp3', '.webm', '.avi', '.mov',
+        '.pdf', '.zip', '.rar', '.7z', '.tar', '.gz',
+        '.css', '.js', '.json', '.xml'
+      ];
+      for (const ext of staticExtensions) {
+        if (pathLower.endsWith(ext)) {
+          return false;
+        }
+      }
+
+      /** 4. Phân tích các phân đoạn (segments) của đường dẫn */
+      const segments = normalizedPath.split('/').filter(Boolean);
+      if (segments.length === 0) {
+        return false;
+      }
+
+      const lastSegment = segments[segments.length - 1];
+
+      /** Loại trừ các slug đơn lẻ phổ biến của chuyên mục / landing page */
+      const genericSingleSlugs = new Set([
+        'news', 'stories', 'story', 'popular', 'trending', 'latest', 'life', 'lifestyle',
+        'health', 'tech', 'technology', 'business', 'viral', 'featured', 'home', 'posts',
+        'blog', 'articles', 'article', 'tin-tuc', 'trang-chu', 'chuyen-muc', 'su-kien'
+      ]);
+      if (genericSingleSlugs.has(lastSegment.toLowerCase())) {
+        return false;
+      }
+
+      /** 5. Quy luật hình thái học của slug bài viết (Slug Morphology) */
+      /** Mẫu A: Dạng date permalink: /2026/10/slug hoặc /2026/10/11/slug */
+      const dateMatch = pathLower.match(/^\/\d{4}\/\d{2}(?:\/\d{2})?\/([a-z0-9\-]+)$/);
+      if (dateMatch && dateMatch[1] && dateMatch[1].length >= 5) {
+        return true;
+      }
+
+      /** Mẫu B: Post ID dạng số (ví dụ: WordPress permalink /12345/ hoặc /p/12345) */
+      const numericIdMatch = lastSegment.match(/^\d{3,8}$/);
+      if (numericIdMatch) {
+        return true;
+      }
+
+      /** Mẫu C: Slug chữ chuẩn (có dấu gạch ngang '-') */
+      const hyphenCount = (lastSegment.match(/-/g) || []).length;
+      /** Một tiêu đề bài viết thông thường có ít nhất 2 dấu gạch nối (>= 3 từ) và dài >= 12 ký tự */
+      if (hyphenCount >= 2 && lastSegment.length >= 12) {
+        return true;
+      }
+
+      /** Mẫu D: Đuôi .html với slug có gạch ngang */
+      if (lastSegment.endsWith('.html') || lastSegment.endsWith('.htm')) {
+        const baseSlug = lastSegment.replace(/\.html?$/, '');
+        if (baseSlug.includes('-') && baseSlug.length >= 8) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ZTTeam: Kiểm duyệt chất lượng nội dung bài viết câu chuyện trước khi xuất bản.
+   * Đảm bảo không phải trang chuyên mục (như "News"), trang 404/Cloudflare, hoặc nội dung quá ngắn.
+   */
+  ztteam_validateStoryArticle(title: string, content: string): { isValid: boolean; reason?: string } {
+    const trimmedTitle = (title || '').trim();
+    const trimmedContent = (content || '').trim();
+
+    /** 1. Kiểm tra tiêu đề */
+    if (!trimmedTitle || trimmedTitle.length < 10) {
+      return { isValid: false, reason: `Tiêu đề quá ngắn (${trimmedTitle.length} ký tự)` };
+    }
+
+    const titleWords = trimmedTitle.split(/\s+/).filter(Boolean);
+    if (titleWords.length < 3) {
+      return { isValid: false, reason: `Tiêu đề có quá ít từ (${titleWords.length} từ), có khả năng là chuyên mục hoặc từ khóa đơn lẻ` };
+    }
+
+    const titleLower = trimmedTitle.toLowerCase();
+    const genericTitles = [
+      'news',
+      'home',
+      'tin tức',
+      'trang chủ',
+      'category',
+      'categories',
+      'archives',
+      'archive',
+      'chuyên mục',
+      'danh mục',
+      'search results',
+      '404 not found',
+      'access denied',
+      'attention required',
+      'just a moment',
+      'about us',
+      'contact us',
+      'privacy policy',
+      'terms of service',
+      'stories',
+      'popular',
+      'latest stories',
+      'uncategorized'
+    ];
+
+    for (const generic of genericTitles) {
+      if (titleLower === generic || titleLower === `${generic} - stories` || titleLower === `${generic} | stories`) {
+        return { isValid: false, reason: `Tiêu đề "${trimmedTitle}" trùng với từ khóa chuyên mục/hệ thống` };
+      }
+    }
+
+    /** 2. Kiểm tra độ dài nội dung */
+    if (trimmedContent.length < 250) {
+      return { isValid: false, reason: `Nội dung quá ngắn (${trimmedContent.length} ký tự < 250 ký tự tiêu chuẩn)` };
+    }
+
+    /** 3. Kiểm tra số câu hoàn chỉnh */
+    const sentenceCount = (trimmedContent.match(/[.!?](\s+|$)/g) || []).length;
+    if (sentenceCount < 2) {
+      return { isValid: false, reason: `Nội dung không đủ câu hoàn chỉnh (${sentenceCount} câu < 2)` };
+    }
+
+    return { isValid: true };
+  }
+
+
   private ztteam_parseReadability(
     html: string,
     url: string,
@@ -142,9 +362,16 @@ export class ZTTeamFetcherService {
 
     /** Clean markdown headers, audio player artifacts (00:00), ad text, and image markdown from text */
     const cleanContent = this.ztteam_cleanStoryContent(text);
+    const finalTitle = title || this.ztteam_extractDomain(url);
+
+    /** ZTTeam Gatekeeper: Kiểm duyệt nội dung từ proxy trước khi trả về */
+    const validation = this.ztteam_validateStoryArticle(finalTitle, cleanContent);
+    if (!validation.isValid) {
+      throw new HttpException(`Không phải bài viết hợp lệ (${validation.reason})`, HttpStatus.BAD_REQUEST);
+    }
 
     return {
-      title: title || this.ztteam_extractDomain(url),
+      title: finalTitle,
       image: images[0] || null,
       images: [...new Set(images)],
       content: cleanContent,
@@ -360,6 +587,12 @@ export class ZTTeamFetcherService {
         images = images.filter(img => getBaseImg(img) !== baseOg);
       }
 
+      /** ZTTeam Gatekeeper: Kiểm duyệt chất lượng tiêu đề và nội dung */
+      const validation = this.ztteam_validateStoryArticle(title, content);
+      if (!validation.isValid) {
+        throw new HttpException(`Không phải bài viết hợp lệ (${validation.reason})`, HttpStatus.BAD_REQUEST);
+      }
+
       return {
         title,
         image,
@@ -371,6 +604,15 @@ export class ZTTeamFetcherService {
         url,
       };
     } catch (directErr: any) {
+      /** Nếu lỗi xuất phát từ việc vi phạm tiêu chuẩn bài viết (trang chuyên mục/rác), ném lỗi luôn, không gọi proxy */
+      if (
+        directErr instanceof HttpException &&
+        directErr.getStatus() === HttpStatus.BAD_REQUEST &&
+        directErr.message?.includes('Không phải bài viết hợp lệ')
+      ) {
+        throw directErr;
+      }
+
       this.logger.warn(`Direct fetch failed for ${url} (${directErr.message}). Automatically switching to bypass proxy...`);
       return await this.ztteam_fetchViaBypassProxy(url);
     }
@@ -402,23 +644,7 @@ export class ZTTeamFetcherService {
       while ((match = linkRegex.exec(text)) !== null) {
         const linkHref = match[2];
         try {
-          const u = new URL(linkHref);
-          if (
-            u.hostname === baseDomain &&
-            u.pathname.length > 8 &&
-            !u.pathname.endsWith('.png') &&
-            !u.pathname.endsWith('.jpg') &&
-            !u.pathname.endsWith('.jpeg') &&
-            !u.pathname.endsWith('.webp') &&
-            !u.pathname.includes('/category/') &&
-            !u.pathname.includes('/tag/') &&
-            !u.pathname.includes('/author/') &&
-            !u.pathname.includes('/page/') &&
-            !u.pathname.includes('/contact') &&
-            !u.pathname.includes('/privacy') &&
-            !u.pathname.includes('/terms') &&
-            !u.pathname.includes('/about')
-          ) {
+          if (this.ztteam_isArticleUrl(linkHref, baseDomain)) {
             articleUrls.add(linkHref);
           }
         } catch (e) {

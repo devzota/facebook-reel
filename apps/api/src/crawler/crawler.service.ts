@@ -65,6 +65,12 @@ export class ZTTeamCrawlerService {
     const cleanContent = this.fetcherService.ztteam_cleanStoryContent(storyData.content);
     const storyTitle = storyData.title.trim();
 
+    /** ZTTeam Gatekeeper: Kiểm duyệt chất lượng tiêu đề và nội dung */
+    const validation = this.fetcherService.ztteam_validateStoryArticle(storyTitle, cleanContent);
+    if (!validation.isValid) {
+      throw new HttpException(`Nội dung không đạt tiêu chuẩn bài viết (${validation.reason})`, HttpStatus.BAD_REQUEST);
+    }
+
     /** 1.1 Tải và lưu trữ ảnh gốc từ website nguồn vào ổ cứng VPS làm bản dự phòng an toàn */
     let sourceBackupImageUrl: string | null = null;
     let sourceBackupLocalPath: string | null = null;

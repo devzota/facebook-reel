@@ -113,10 +113,13 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
     try {
       const feed = await this.rssParser.parseURL(source.source_url);
       if (feed.items && feed.items.length > 0) {
-        /** Take the top 5 latest items to prevent overload */
-        const items = feed.items.slice(0, 5);
-        for (const item of items) {
-          if (item.link) urlsToFetch.push(item.link);
+        const baseUrl = new URL(source.source_url);
+        /** Lọc chỉ lấy các item có URL thực sự là bài viết (loại bỏ category feed, author feed) */
+        for (const item of feed.items) {
+          if (item.link && this.fetcherService.ztteam_isArticleUrl(item.link, baseUrl.hostname)) {
+            urlsToFetch.push(item.link);
+            if (urlsToFetch.length >= 10) break;
+          }
         }
       }
     } catch (error: any) {
@@ -128,66 +131,69 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
         const cheerio = require('cheerio');
         const $ = cheerio.load(html);
         
-        /** Remove header, footer, nav, sidebars to avoid scraping "Page" links (About, Contact, Privacy) */
-        $('header, footer, nav, aside, .sidebar, .widget, .menu, #menu, .nav-menu').remove();
+        /** Remove header, footer, nav, sidebars, menus, pagination, breadcrumbs to avoid scraping menu/page links */
+        $('header, footer, nav, aside, .sidebar, .widget, .menu, #menu, .nav-menu, .navigation, .pagination, .breadcrumbs, .breadcrumb, .site-header, .site-footer, .top-bar, .sub-menu, .dropdown-menu').remove();
         
         const baseUrl = new URL(source.source_url);
         const extractedUrls = new Set<string>();
 
-        $('a').each((i: number, el: any) => {
+        /** TẦNG 2: Ưu tiên bóc tách từ các phần tử chứa bài viết theo ngữ cảnh */
+        const articleSelectors = [
+          'article a',
+          'h1 a', 'h2 a', 'h3 a', 'h4 a',
+          '.entry-title a', '.post-title a', '.card-title a', '.story-card a', '.article-card a',
+          '.post-item a', '.blog-post a', '.story-item a', '.item-title a'
+        ];
+
+        $(articleSelectors.join(', ')).each((i: number, el: any) => {
           let href = $(el).attr('href');
           if (!href) return;
-          
           try {
-            /** Handle relative URLs */
             if (href.startsWith('/')) {
               href = `${baseUrl.origin}${href}`;
             }
-            
             const linkUrl = new URL(href);
-            
-            /** Basic heuristics for an article link:
-             * 1. Same domain
-             * 2. Path is sufficiently long (usually > 15 chars for slug) or has hyphens
-             * 3. Not a category, tag, author, or login page
-             */
-            if (linkUrl.hostname === baseUrl.hostname) {
-              const path = linkUrl.pathname;
-              if (
-                path !== '/' &&
-                path.length > 5 &&
-                !path.includes('/category/') &&
-                !path.includes('/tag/') &&
-                !path.includes('/author/') &&
-                !path.includes('/page/') &&
-                !path.includes('/contact') &&
-                !path.includes('/privacy') &&
-                !path.includes('/terms') &&
-                !path.includes('/about') &&
-                !path.includes('wp-admin') &&
-                !path.includes('wp-login')
-              ) {
-                extractedUrls.add(linkUrl.href);
-              }
+            /** Kiểm tra qua Tầng 1: Heuristics & Morphology */
+            if (this.fetcherService.ztteam_isArticleUrl(linkUrl.href, baseUrl.hostname)) {
+              extractedUrls.add(linkUrl.href);
             }
           } catch (e) {
             /** Invalid URL, ignore */
           }
         });
 
-        /** Take top 10 instead of 5 to get more articles */
+        /** Nếu selectors chuyên biệt chưa tìm thấy đủ bài, quét toàn bộ thẻ <a> còn lại trong nội dung */
+        if (extractedUrls.size < 5) {
+          $('a').each((i: number, el: any) => {
+            let href = $(el).attr('href');
+            if (!href) return;
+            try {
+              if (href.startsWith('/')) {
+                href = `${baseUrl.origin}${href}`;
+              }
+              const linkUrl = new URL(href);
+              if (this.fetcherService.ztteam_isArticleUrl(linkUrl.href, baseUrl.hostname)) {
+                extractedUrls.add(linkUrl.href);
+              }
+            } catch (e) {
+              /** Invalid URL, ignore */
+            }
+          });
+        }
+
+        /** Take top 10 articles */
         urlsToFetch.push(...Array.from(extractedUrls).slice(0, 10));
         
         if (urlsToFetch.length === 0) {
-          this.logger.log(`No direct HTML links found on ${source.source_url}. Falling back to Smart Proxy extraction...`);
+          this.logger.log(`No direct HTML article links found on ${source.source_url}. Falling back to Smart Proxy extraction...`);
           const proxyLinks = await this.fetcherService.ztteam_extractArticleLinksViaProxy(source.source_url);
           urlsToFetch.push(...proxyLinks.slice(0, 10));
         }
 
         if (urlsToFetch.length === 0) {
-          this.logger.warn(`Could not find any article links on ${source.source_url}`);
+          this.logger.warn(`Could not find any authentic article links on ${source.source_url}`);
         } else {
-          this.logger.log(`Extracted ${urlsToFetch.length} links from ${source.source_url}`);
+          this.logger.log(`Extracted ${urlsToFetch.length} authentic article links from ${source.source_url}`);
         }
       } catch (htmlError: any) {
         this.logger.warn(`Direct HTML scrape failed for ${source.source_url}: ${htmlError.message}. Attempting Smart Proxy extraction...`);
@@ -196,7 +202,7 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
           urlsToFetch.push(...proxyLinks.slice(0, 10));
         } catch (proxyErr: any) {
           this.logger.error(`Smart proxy extraction also failed for ${source.source_url}: ${proxyErr.message}`);
-          urlsToFetch.push(source.source_url);
+          /** Tuyệt đối KHÔNG đẩy source.source_url vào urlsToFetch để tránh cào nhầm trang chủ */
         }
       }
     }
@@ -267,6 +273,22 @@ export class ZTTeamCrawlerCron implements OnApplicationBootstrap {
         processedCount++;
         attemptCount++;
       } catch (err: any) {
+        /** Kiểm tra nếu lỗi do vi phạm cổng kiểm duyệt bài viết (trang chuyên mục hoặc không đạt chuẩn nội dung) */
+        const isNonArticle = err.message?.includes('Không phải bài viết hợp lệ') ||
+                             err.message?.includes('Nội dung không đạt tiêu chuẩn bài viết');
+
+        if (isNonArticle) {
+          this.logger.log(`[TỰ ĐỘNG BỎ QUA] URL không phải bài viết: ${url} (${err.message})`);
+          try {
+            await this.prisma.ztteam_crawl_history.upsert({
+              where: { source_id_url: { source_id: source.id, url } },
+              create: { source_id: source.id, url, status: 'SKIPPED_NOT_ARTICLE' },
+              update: { status: 'SKIPPED_NOT_ARTICLE' }
+            });
+          } catch (e) {}
+          continue; /** Chuyển sang URL tiếp theo, không gửi cảnh báo lỗi Telegram */
+        }
+
         attemptCount++; /** Tăng lượt thử để không bao giờ chạy tràn lan khi lỗi */
         this.logger.error(`Failed to process URL ${url}: ${err.message}`);
         
