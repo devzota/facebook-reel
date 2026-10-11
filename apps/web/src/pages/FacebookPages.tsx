@@ -57,12 +57,12 @@ function FanpageCard({ page, isExpired, testingPageId, handleTestPost, handleTog
   const handleDeletePage = async () => {
     const confirm = await ztteam_showConfirm(
       'Xóa Fanpage',
-      `Bạn có chắc muốn xóa Fanpage "${page.name}"? Tất cả Reels, Ảnh, Lịch sử, và Cấu hình sẽ bị xóa vĩnh viễn và không thể khôi phục.`
+      `Bạn có chắc muốn xóa Fanpage "${page.name}"? Tất cả bài đã đăng sẽ bị xóa. Các bài chưa đăng sẽ được tự động chia đều cho các Fanpage còn lại.`
     );
     if (confirm) {
       try {
-        await ztteam_deletePage(page.id);
-        ztteam_showToast(`Đã xóa Fanpage ${page.name} thành công`, 'success');
+        const result = await ztteam_deletePage(page.id);
+        ztteam_showToast(result?.message || `Đã xóa Fanpage ${page.name} thành công`, 'success');
       } catch (error: any) {
         ztteam_showToast(error.message, 'error');
       }

@@ -972,8 +972,10 @@ export class ZTTeamFacebookService {
   }
 
   /**
-   * Xóa 1 Fanpage và toàn bộ dữ liệu liên quan (Reels, Images, History, Sources).
-   * Xóa tường minh từng bảng, KHÔNG dựa vào cascade.
+   * ZTTeam: Xóa 1 Fanpage:
+   * 1. Chỉ xóa các bài ĐÃ ĐĂNG (is_posted = true hoặc status = POSTED).
+   * 2. Các bài CHƯA ĐĂNG (is_posted = false) được tự động chia đều (Round-Robin) cho các Fanpage còn lại của User.
+   * 3. Đồng bộ lịch sử hình ảnh và video sang Fanpage mới để tránh crawl trùng lặp.
    */
   async ztteam_deletePage(pageId: string, userId: string) {
     const fs = require('fs');
@@ -1000,44 +1002,158 @@ export class ZTTeamFacebookService {
 
     const internalPageId = page.id;
 
-    /** 1. Xóa file video vật lý + record Reels */
-    const reels = await this.prisma.ztteam_reels.findMany({ where: { page_id: internalPageId } });
-    for (const reel of reels) {
-      try {
-        const reelDir = ztteam_getReelsPath(reel.id);
-        if (fs.existsSync(reelDir)) {
-          fs.rmSync(reelDir, { recursive: true, force: true });
-        }
-      } catch (e) {
-        this.logger.warn(`Error deleting reel files for ${reel.id}`, e);
-      }
-    }
-    await this.prisma.ztteam_reels.deleteMany({ where: { page_id: internalPageId } });
+    /** Lấy danh sách các Fanpage còn lại của người dùng này để phân bổ lại các bài chưa đăng */
+    const allRemainingPages = await this.prisma.ztteam_pages.findMany({
+      where: {
+        id: { not: internalPageId },
+        fb_account: {
+          owner_user_id: userId,
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
 
-    /** 2. Xóa file ảnh vật lý + record Images */
-    const images = await this.prisma.ztteam_images.findMany({ where: { page_id: internalPageId } });
-    for (const image of images) {
+    const activeRemainingPages = allRemainingPages.filter(p => p.is_active !== false);
+    const targetCandidatePages = activeRemainingPages.length > 0 ? activeRemainingPages : allRemainingPages;
+
+    let deletedPostedImagesCount = 0;
+    let redistributedImagesCount = 0;
+    let deletedPostedReelsCount = 0;
+    let redistributedReelsCount = 0;
+
+    /** 1. XỬ LÝ BÀI ĐĂNG HÌNH ẢNH (ztteam_images) */
+    const allImages = await this.prisma.ztteam_images.findMany({
+      where: { page_id: internalPageId },
+      orderBy: { created_at: 'asc' },
+    });
+
+    const postedImages = allImages.filter(img => img.is_posted === true || img.status === 'POSTED');
+    const unpostedImages = allImages.filter(img => img.is_posted === false && img.status !== 'POSTED');
+
+    /** 1.1 Xóa file vật lý và record của các bài ĐÃ ĐĂNG */
+    for (const image of postedImages) {
       try {
         const imageDir = ztteam_getImagesPath(image.id);
         if (fs.existsSync(imageDir)) {
           fs.rmSync(imageDir, { recursive: true, force: true });
         }
       } catch (e) {
-        this.logger.warn(`Error deleting image files for ${image.id}`, e);
+        this.logger.warn(`Error deleting posted image files for ${image.id}`, e);
       }
     }
-    await this.prisma.ztteam_images.deleteMany({ where: { page_id: internalPageId } });
+    if (postedImages.length > 0) {
+      await this.prisma.ztteam_images.deleteMany({
+        where: { id: { in: postedImages.map(img => img.id) } },
+      });
+      deletedPostedImagesCount = postedImages.length;
+    }
 
-    /** 3. Xóa lịch sử Reel */
+    /** 1.2 Phân bổ đều các bài CHƯA ĐĂNG cho các Fanpage còn lại */
+    if (unpostedImages.length > 0) {
+      if (targetCandidatePages.length > 0) {
+        for (let i = 0; i < unpostedImages.length; i++) {
+          const targetPage = targetCandidatePages[i % targetCandidatePages.length];
+          const image = unpostedImages[i];
+
+          await this.prisma.ztteam_images.update({
+            where: { id: image.id },
+            data: { page_id: targetPage.id },
+          });
+
+          /** Đồng bộ image_history sang Fanpage mới để tránh crawl trùng lặp */
+          await this.prisma.ztteam_image_history.upsert({
+            where: { page_id_wp_post_id: { page_id: targetPage.id, wp_post_id: image.wp_post_id } },
+            create: { page_id: targetPage.id, wp_post_id: image.wp_post_id },
+            update: {},
+          });
+        }
+        redistributedImagesCount = unpostedImages.length;
+      } else {
+        /** Nếu người dùng không còn bất kỳ Fanpage nào khác, bắt buộc xóa bài chưa đăng */
+        for (const image of unpostedImages) {
+          try {
+            const imageDir = ztteam_getImagesPath(image.id);
+            if (fs.existsSync(imageDir)) {
+              fs.rmSync(imageDir, { recursive: true, force: true });
+            }
+          } catch (e) {}
+        }
+        await this.prisma.ztteam_images.deleteMany({
+          where: { id: { in: unpostedImages.map(img => img.id) } },
+        });
+      }
+    }
+
+    /** 2. XỬ LÝ VIDEO REELS (ztteam_reels) */
+    const allReels = await this.prisma.ztteam_reels.findMany({
+      where: { page_id: internalPageId },
+      orderBy: { created_at: 'asc' },
+    });
+
+    const postedReels = allReels.filter(reel => reel.is_posted === true);
+    const unpostedReels = allReels.filter(reel => reel.is_posted === false);
+
+    /** 2.1 Xóa file vật lý và record của các Reel ĐÃ ĐĂNG */
+    for (const reel of postedReels) {
+      try {
+        const reelDir = ztteam_getReelsPath(reel.id);
+        if (fs.existsSync(reelDir)) {
+          fs.rmSync(reelDir, { recursive: true, force: true });
+        }
+      } catch (e) {
+        this.logger.warn(`Error deleting posted reel files for ${reel.id}`, e);
+      }
+    }
+    if (postedReels.length > 0) {
+      await this.prisma.ztteam_reels.deleteMany({
+        where: { id: { in: postedReels.map(r => r.id) } },
+      });
+      deletedPostedReelsCount = postedReels.length;
+    }
+
+    /** 2.2 Phân bổ đều các Reel CHƯA ĐĂNG cho các Fanpage còn lại */
+    if (unpostedReels.length > 0) {
+      if (targetCandidatePages.length > 0) {
+        for (let i = 0; i < unpostedReels.length; i++) {
+          const targetPage = targetCandidatePages[i % targetCandidatePages.length];
+          const reel = unpostedReels[i];
+
+          await this.prisma.ztteam_reels.update({
+            where: { id: reel.id },
+            data: { page_id: targetPage.id },
+          });
+
+          await this.prisma.ztteam_reel_history.upsert({
+            where: { page_id_wp_post_id: { page_id: targetPage.id, wp_post_id: reel.wp_post_id } },
+            create: { page_id: targetPage.id, wp_post_id: reel.wp_post_id },
+            update: {},
+          });
+        }
+        redistributedReelsCount = unpostedReels.length;
+      } else {
+        for (const reel of unpostedReels) {
+          try {
+            const reelDir = ztteam_getReelsPath(reel.id);
+            if (fs.existsSync(reelDir)) {
+              fs.rmSync(reelDir, { recursive: true, force: true });
+            }
+          } catch (e) {}
+        }
+        await this.prisma.ztteam_reels.deleteMany({
+          where: { id: { in: unpostedReels.map(r => r.id) } },
+        });
+      }
+    }
+
+    /** 3. Dọn dẹp lịch sử cũ và nguồn WP của Fanpage bị xóa */
     await this.prisma.ztteam_reel_history.deleteMany({ where: { page_id: internalPageId } });
-
-    /** 4. Xóa nguồn WP gán cho Page */
+    await this.prisma.ztteam_image_history.deleteMany({ where: { page_id: internalPageId } });
     await this.prisma.ztteam_page_sources.deleteMany({ where: { page_id: internalPageId } });
 
-    /** 5. Xóa bản ghi Page */
+    /** 4. Xóa bản ghi Page */
     await this.prisma.ztteam_pages.delete({ where: { id: internalPageId } });
 
-    /** 6. Dọn dẹp FB Account nếu không còn Fanpage nào liên kết */
+    /** 5. Dọn dẹp FB Account nếu không còn Fanpage nào liên kết */
     if (page.fb_account_id) {
       const remainingPages = await this.prisma.ztteam_pages.count({
         where: { fb_account_id: page.fb_account_id }
@@ -1047,7 +1163,30 @@ export class ZTTeamFacebookService {
       }
     }
 
-    return { message: `Đã xóa Fanpage "${page.name}" và toàn bộ dữ liệu liên quan` };
+    const summaryParts: string[] = [];
+    if (deletedPostedImagesCount > 0 || deletedPostedReelsCount > 0) {
+      summaryParts.push(`đã xóa ${deletedPostedImagesCount + deletedPostedReelsCount} bài đã đăng`);
+    }
+    if (redistributedImagesCount > 0 || redistributedReelsCount > 0) {
+      summaryParts.push(`đã chia đều ${redistributedImagesCount + redistributedReelsCount} bài chưa đăng sang ${targetCandidatePages.length} Fanpage còn lại`);
+    }
+
+    const finalMessage = summaryParts.length > 0
+      ? `Đã xóa Fanpage "${page.name}". Chi tiết: ${summaryParts.join(', ')}.`
+      : `Đã xóa Fanpage "${page.name}" thành công`;
+
+    this.logger.log(`ZTTeam deletePage: ${finalMessage}`);
+    return {
+      success: true,
+      message: finalMessage,
+      data: {
+        deletedPostedImagesCount,
+        redistributedImagesCount,
+        deletedPostedReelsCount,
+        redistributedReelsCount,
+        remainingPagesCount: targetCandidatePages.length,
+      }
+    };
   }
 
   /**
@@ -1422,7 +1561,19 @@ export class ZTTeamFacebookService {
       throw new BadRequestException('Tài khoản Facebook không tồn tại hoặc bạn không có quyền xóa');
     }
 
-    await this.prisma.ztteam_fb_accounts.delete({ where: { id: accountId } });
+    /** Xóa tuần tự từng Fanpage thuộc tài khoản này để bảo lưu và chia đều bài chưa đăng */
+    const pages = await this.prisma.ztteam_pages.findMany({
+      where: { fb_account_id: accountId }
+    });
+    for (const p of pages) {
+      try {
+        await this.ztteam_deletePage(p.id, userId);
+      } catch (e: any) {
+        this.logger.warn(`Không thể xóa Fanpage ${p.id} khi xóa account: ${e.message}`);
+      }
+    }
+
+    await this.prisma.ztteam_fb_accounts.delete({ where: { id: accountId } }).catch(() => null);
 
     return {
       success: true,

@@ -52,7 +52,7 @@ interface ZTTeamFacebookState {
   ztteam_fetchPages: () => Promise<void>;
   ztteam_testPost: (pageId: string, message: string) => Promise<void>;
   ztteam_updatePageConfig: (pageId: string, config: any) => Promise<void>;
-  ztteam_deletePage: (pageId: string) => Promise<void>;
+  ztteam_deletePage: (pageId: string) => Promise<any>;
   ztteam_deleteAccount: (accountId: string) => Promise<void>;
   ztteam_getPageReport: (pageId: string) => Promise<any>;
   ztteam_getTopPosts: (pageId: string) => Promise<any>;
@@ -206,8 +206,9 @@ export const useZTTeamFacebookStore = create<ZTTeamFacebookState>((set, get) => 
 
   ztteam_deletePage: async (pageId: string) => {
     try {
-      await api.delete(`/facebook/pages/${pageId}`);
+      const response = await api.delete(`/facebook/pages/${pageId}`);
       await get().ztteam_fetchPagesFromDB();
+      return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Lỗi khi xóa Fanpage');
     }
