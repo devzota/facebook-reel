@@ -123,6 +123,7 @@ model ztteam_target_sites {
   wp_app_password_encrypted String
   status                    String   @default("active")
   is_manual                 Boolean  @default(false)
+  ga4_property_id           String?  /** Google Analytics 4 Property ID (vd: 432891045) */
   owner_user_id             String
   created_at                DateTime @default(now())
   updated_at                DateTime @updatedAt
@@ -291,4 +292,10 @@ model ztteam_page_youtube_settings {
 
   page           ztteam_pages           @relation(fields: [page_id], references: [id], onDelete: Cascade)
   source         ztteam_youtube_sources @relation(fields: [source_id], references: [id], onDelete: Cascade)
+}
+
+model ztteam_system_settings {
+  key        String   @id
+  value      String   @db.Text
+  updated_at DateTime @updatedAt
 }

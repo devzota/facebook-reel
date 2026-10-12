@@ -104,7 +104,7 @@ export class ZTTeamWordpressService {
     return true;
   }
 
-  async ztteam_createTargetSite(userId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }) {
+  async ztteam_createTargetSite(userId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean; ga4PropertyId?: string }) {
     await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
 
     return this.prisma.ztteam_target_sites.create({
@@ -114,12 +114,13 @@ export class ZTTeamWordpressService {
         wp_username: data.wpUsername,
         wp_app_password_encrypted: this.ztteam_encrypt(data.wpAppPassword),
         status: 'active',
-        is_manual: data.isManual ?? false
+        is_manual: data.isManual ?? false,
+        ga4_property_id: data.ga4PropertyId ? data.ga4PropertyId.trim() : null,
       }
     });
   }
 
-  async ztteam_updateTargetSite(userId: string, siteId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }) {
+  async ztteam_updateTargetSite(userId: string, siteId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean; ga4PropertyId?: string }) {
     if (data.wpAppPassword) {
       await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
     }
@@ -131,6 +132,10 @@ export class ZTTeamWordpressService {
 
     if (data.isManual !== undefined) {
       updateData.is_manual = data.isManual;
+    }
+
+    if (data.ga4PropertyId !== undefined) {
+      updateData.ga4_property_id = data.ga4PropertyId ? data.ga4PropertyId.trim() : null;
     }
 
     if (data.wpAppPassword) {

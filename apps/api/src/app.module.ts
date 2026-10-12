@@ -19,6 +19,7 @@ import { ZTTeamSettingsModule } from './settings/settings.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { StorageModule } from './storage-cleanup/storage.module';
 import { ZTTeamStoryTestModule } from './story-test/story-test.module';
+import { ZTTeamAnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ZTTeamStoryTestModule } from './story-test/story-test.module';
     TelegramModule,
     StorageModule,
     ZTTeamStoryTestModule,
+    ZTTeamAnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

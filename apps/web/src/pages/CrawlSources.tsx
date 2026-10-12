@@ -38,6 +38,7 @@ export default function WordPressSites() {
   const [wpUrl, setWpUrl] = useState('');
   const [wpUsername, setWpUsername] = useState('');
   const [wpAppPassword, setWpAppPassword] = useState('');
+  const [ga4PropertyId, setGa4PropertyId] = useState('');
   const [isManual, setIsManual] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -134,6 +135,7 @@ export default function WordPressSites() {
     setWpUrl('');
     setWpUsername('');
     setWpAppPassword('');
+    setGa4PropertyId('');
     setIsManual(false);
     setTestResult(null);
   };
@@ -143,6 +145,7 @@ export default function WordPressSites() {
     setWpUrl(site.wp_url);
     setWpUsername(site.wp_username);
     setWpAppPassword('');
+    setGa4PropertyId(site.ga4_property_id || '');
     setIsManual(site.is_manual || false);
     setShowSiteForm(true);
     setTestResult(null);
@@ -184,10 +187,10 @@ export default function WordPressSites() {
     e.preventDefault();
     try {
       if (editingSiteId) {
-        await ztteam_updateSite(editingSiteId, { wpUrl, wpUsername, wpAppPassword: wpAppPassword || undefined, isManual });
+        await ztteam_updateSite(editingSiteId, { wpUrl, wpUsername, wpAppPassword: wpAppPassword || undefined, isManual, ga4PropertyId: ga4PropertyId.trim() || undefined });
         ztteam_showToast('Cập nhật website thành công', 'success');
       } else {
-        await ztteam_createSite({ wpUrl, wpUsername, wpAppPassword, isManual });
+        await ztteam_createSite({ wpUrl, wpUsername, wpAppPassword, isManual, ga4PropertyId: ga4PropertyId.trim() || undefined });
         ztteam_showToast('Thêm website thành công', 'success');
       }
       ztteam_resetSiteForm();
@@ -380,7 +383,7 @@ export default function WordPressSites() {
             <span>Kiểm tra Toàn bộ</span>
           </button>
           <button
-            onClick={() => { setShowSiteForm(true); setEditingSiteId(null); setWpUrl(''); setWpUsername(''); setWpAppPassword(''); setTestResult(null); }}
+            onClick={() => { setShowSiteForm(true); setEditingSiteId(null); setWpUrl(''); setWpUsername(''); setWpAppPassword(''); setGa4PropertyId(''); setTestResult(null); }}
             className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-fb-blue to-cyan-500 text-white px-2.5 sm:px-4 py-2 rounded-full text-xs font-bold shadow-md hover:opacity-95 transition-all shrink-0 whitespace-nowrap"
           >
             <span className="material-symbols-outlined text-base">add</span>
@@ -423,6 +426,28 @@ export default function WordPressSites() {
                   className="w-full py-2.5 px-4 rounded-full bg-fb-surface-hover text-fb-text text-sm placeholder:text-fb-text-muted/60 focus:outline-none focus:ring-2 focus:ring-fb-blue" required={!editingSiteId} />
                 <p className="mt-1 text-[11px] text-fb-text-muted">Tạo trong WP Admin &gt; Users &gt; Profile &gt; Application Passwords.</p>
               </div>
+            </div>
+
+            {/** Cấu hình Google Analytics 4 Property ID */}
+            <div>
+              <label className="text-xs font-bold text-fb-text-muted mb-1.5 block uppercase tracking-wider">
+                Google Analytics 4 Property ID (Tùy chọn)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={ga4PropertyId}
+                  onChange={(e) => setGa4PropertyId(e.target.value)}
+                  placeholder="Ví dụ: 485123456 (Dãy số Property ID trong GA4)"
+                  className="w-full py-2.5 px-4 pr-10 rounded-full bg-fb-surface-hover text-fb-text text-sm placeholder:text-fb-text-muted/60 focus:outline-none focus:ring-2 focus:ring-fb-blue"
+                />
+                <span className="material-symbols-outlined absolute right-3.5 top-2.5 text-fb-text-muted text-lg pointer-events-none">
+                  analytics
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-fb-text-muted">
+                Dùng để đo lường độc giả online thời gian thực và nguồn traffic về riêng cho website này.
+              </p>
             </div>
 
             {/** Cấu hình Chế độ Đăng Thủ Công (Manual Studio) */}
@@ -522,6 +547,15 @@ export default function WordPressSites() {
                               <span className="material-symbols-outlined text-[12px]">dynamic_feed</span>
                               <span>Tự Động Fanpage</span>
                             </span>
+                          )}
+                          {site.ga4_property_id && (
+                            <>
+                              <span>•</span>
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 flex items-center gap-1" title={`GA4 Property ID: ${site.ga4_property_id}`}>
+                                <span className="material-symbols-outlined text-[12px]">analytics</span>
+                                <span>GA4: {site.ga4_property_id}</span>
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>

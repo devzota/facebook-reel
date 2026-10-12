@@ -8,6 +8,7 @@ import { useZTTeamAuthStore } from '../stores/authStore';
 import { useZTTeamFacebookStore } from '../stores/facebookStore';
 import { useWordpressStore } from '../stores/wordpressStore';
 import CustomDropdown from '../components/CustomDropdown';
+import ZTTeamGAConfigModal from '../components/GAConfigModal';
 
 export default function StatisticsPage() {
   const { user } = useZTTeamAuthStore();
@@ -17,6 +18,10 @@ export default function StatisticsPage() {
   const { pages, ztteam_fetchPagesFromDB } = useZTTeamFacebookStore();
   const { sites, ztteam_fetchSites } = useWordpressStore();
 
+  /** Tab điều hướng chính */
+  const [activeTab, setActiveTab] = useState<'production' | 'ga4'>('production');
+
+  /** Tab 1: Dữ liệu sản lượng & đăng bài */
   const [data, setData] = useState({
     chartData: [] as any[],
     leaderboard: [] as any[],
@@ -30,6 +35,13 @@ export default function StatisticsPage() {
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [systemUsers, setSystemUsers] = useState<any[]>([]);
 
+  /** Tab 2: Dữ liệu Google Analytics 4 Realtime */
+  const [gaStats, setGaStats] = useState<any>(null);
+  const [isLoadingGA, setIsLoadingGA] = useState(false);
+  const [selectedGASiteId, setSelectedGASiteId] = useState('');
+  const [isGAConfigOpen, setIsGAConfigOpen] = useState(false);
+  const [gaLastUpdated, setGaLastUpdated] = useState<Date | null>(null);
+
   const ztteam_formatNumber = (num: number) => {
     if (!num) return '0';
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -37,6 +49,7 @@ export default function StatisticsPage() {
     return num.toLocaleString();
   };
 
+  /** Lấy danh sách fanpage, website và users */
   useEffect(() => {
     ztteam_fetchPagesFromDB();
     ztteam_fetchSites();
@@ -48,6 +61,7 @@ export default function StatisticsPage() {
     }
   }, [ztteam_fetchPagesFromDB, ztteam_fetchSites, isAdmin]);
 
+  /** Lấy dữ liệu biểu đồ Tab 1 */
   useEffect(() => {
     const fetchChart = async () => {
       setIsLoading(true);
@@ -70,7 +84,38 @@ export default function StatisticsPage() {
     fetchChart();
   }, [days, selectedUserId, selectedPageId, selectedSiteId]);
 
-  /** Extract dynamic chart keys */
+  /** Hàm tải số liệu GA4 Realtime */
+  const ztteam_fetchGAStats = async () => {
+    try {
+      setIsLoadingGA(true);
+      let url = '/analytics/realtime';
+      if (selectedGASiteId) {
+        url += `?siteId=${selectedGASiteId}`;
+      }
+      const res = await api.get(url);
+      if (res.data) {
+        setGaStats(res.data);
+        setGaLastUpdated(new Date());
+      }
+    } catch (e) {
+      console.error('Lỗi lấy thống kê GA4:', e);
+    } finally {
+      setIsLoadingGA(false);
+    }
+  };
+
+  /** Tự động polling dữ liệu GA4 khi đang mở tab GA4 */
+  useEffect(() => {
+    if (activeTab === 'ga4') {
+      ztteam_fetchGAStats();
+      const interval = setInterval(() => {
+        ztteam_fetchGAStats();
+      }, 25000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, selectedGASiteId]);
+
+  /** Trích xuất dynamic chart keys cho Tab 1 */
   const crawlKeys = useMemo(() => {
     if (!data.chartData.length) return [];
     return Object.keys(data.chartData[0]).filter(k => k.startsWith('crawl_'));
@@ -129,448 +174,897 @@ export default function StatisticsPage() {
     ...sites.map(s => ({ value: s.id, label: s.wp_url }))
   ], [sites]);
 
+  const ztteam_gaSiteOptions = useMemo(() => [
+    { value: '', label: 'Property Mặc Định (Tất cả)' },
+    ...sites.map(s => ({ 
+      value: s.id, 
+      label: `${s.wp_url}${s.ga4_property_id ? ` (GA4: ${s.ga4_property_id})` : ''}` 
+    }))
+  ], [sites]);
+
+  /** Chuẩn hóa dữ liệu 30 phút cho biểu đồ GA4 */
+  const ztteam_minuteChartData = useMemo(() => {
+    if (!gaStats?.minuteTrend || !Array.isArray(gaStats.minuteTrend)) return [];
+    const minuteMap = new Map<number, number>();
+    gaStats.minuteTrend.forEach((item: any) => {
+      minuteMap.set(item.minutesAgo, item.activeUsers);
+    });
+    const result = [];
+    for (let i = 29; i >= 0; i--) {
+      result.push({
+        minuteLabel: i === 0 ? 'Hiện tại' : `-${i}p`,
+        minutesAgo: i,
+        activeUsers: minuteMap.get(i) || 0,
+      });
+    }
+    return result;
+  }, [gaStats?.minuteTrend]);
+
   return (
     <div className="w-full space-y-6">
-      {/* Header & Filter Bar */}
-      <div className="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Báo Cáo Thống Kê</h2>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 shadow-sm shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Realtime
-            </span>
+      {/** Khung 2-Tab Navigation Bar đồng bộ với FacebookPageSettings.tsx */}
+      <div className="flex border-b border-fb-surface-hover/60 bg-fb-surface px-4 pt-2 rounded-2xl shadow-sm gap-2">
+        <button
+          onClick={() => setActiveTab('production')}
+          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all ${
+            activeTab === 'production'
+              ? 'border-fb-blue text-fb-blue bg-fb-blue/5 shadow-xs'
+              : 'border-transparent text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/40'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">bar_chart</span>
+          1. Sản Lượng &amp; Đăng Bài
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ga4')}
+          className={`px-6 py-3.5 font-black text-sm flex items-center gap-2.5 border-b-2 rounded-t-xl transition-all cursor-pointer ${
+            activeTab === 'ga4'
+              ? 'border-emerald-400 text-emerald-400 bg-emerald-400/5 shadow-xs'
+              : 'border-transparent text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover/40'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">insights</span>
+          2. Thời Gian Thực (Google Analytics 4)
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Live
+          </span>
+        </button>
+      </div>
+
+      {/** TAB 1: SẢN LƯỢNG & ĐĂNG BÀI */}
+      {activeTab === 'production' && (
+        <div className="w-full space-y-6">
+          {/** Header & Filter Bar */}
+          <div className="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Báo Cáo Thống Kê</h2>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 shadow-sm shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Realtime
+                </span>
+              </div>
+              <p className="text-sm font-medium text-fb-text-muted mt-1">Hiệu suất cào bài, đăng video và tương tác Facebook Insights toàn hệ thống.</p>
+            </div>
+            
+            {/** Responsive Filters & Tab Switcher */}
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full xl:w-auto">
+              {isAdmin && (
+                <CustomDropdown
+                  value={selectedUserId}
+                  onChange={(val) => setSelectedUserId(String(val))}
+                  options={ztteam_userOptions}
+                  className="w-full sm:w-48"
+                />
+              )}
+
+              <CustomDropdown
+                value={selectedPageId}
+                onChange={(val) => setSelectedPageId(String(val))}
+                options={ztteam_pageOptions}
+                className="w-full sm:w-44"
+              />
+
+              <CustomDropdown
+                value={selectedSiteId}
+                onChange={(val) => setSelectedSiteId(String(val))}
+                options={ztteam_siteOptions}
+                className="w-full sm:w-44"
+              />
+
+              {/** Tab 7 ngày và 30 ngày */}
+              <div className="grid grid-cols-2 gap-1 bg-fb-surface-hover p-1.5 rounded-full text-xs font-bold w-full sm:w-52 shrink-0">
+                <button 
+                  onClick={() => setDays(7)} 
+                  className={`w-full py-1.5 px-3 rounded-full text-xs text-center transition-all ${
+                    days === 7 
+                      ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20' 
+                      : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
+                  }`}
+                >
+                  7 Ngày
+                </button>
+                <button 
+                  onClick={() => setDays(30)} 
+                  className={`w-full py-1.5 px-3 rounded-full text-xs text-center transition-all ${
+                    days === 30 
+                      ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20' 
+                      : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
+                  }`}
+                >
+                  30 Ngày
+                </button>
+              </div>
+            </div>
           </div>
-          <p className="text-sm font-medium text-fb-text-muted mt-1">Hiệu suất cào bài, đăng video và tương tác Facebook Insights toàn hệ thống.</p>
-        </div>
-        
-        {/* Responsive Filters & Tab Switcher */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full xl:w-auto">
-          {isAdmin && (
-            <CustomDropdown
-              value={selectedUserId}
-              onChange={(val) => setSelectedUserId(String(val))}
-              options={ztteam_userOptions}
-              className="w-full sm:w-48"
-            />
+
+          {/** 4 Stat Cards Thống Kê Động */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/** Card 1: Lượt Xem Video */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider">Lượt Xem Video</p>
+                  <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-emerald-300 transition-colors">
+                    {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.totalMediaViews || 0)}
+                  </h3>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">visibility</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Tiếp cận: <b className="text-emerald-300 font-bold">{ztteam_formatNumber((data as any).overview?.totalUniqueReach || 0)}</b></span>
+                <span className="text-emerald-400 font-bold hidden sm:inline">FB Insights</span>
+              </div>
+            </div>
+
+            {/** Card 2: Reels Đã Đăng */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-blue-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-blue-400 uppercase tracking-wider">Reels Đã Đăng</p>
+                  <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-blue-300 transition-colors">
+                    {isLoading ? '...' : ztteam_formatNumber(totalPublished)}
+                  </h3>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-fb-blue text-white rounded-xl shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">post_add</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Xuất bản: <b className="text-blue-300 font-bold">{ztteam_formatNumber(totalPublished)}</b></span>
+                <span className="text-blue-400 font-bold hidden sm:inline">Auto Posted</span>
+              </div>
+            </div>
+
+            {/** Card 3: AI Reels Đã Tạo */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-wider">AI Reels Đã Tạo</p>
+                  <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-cyan-300 transition-colors">
+                    {isLoading ? '...' : ztteam_formatNumber(totalCreated)}
+                  </h3>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-cyan-400 to-blue-600 text-white rounded-xl shadow-lg shadow-cyan-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">auto_awesome</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Crawl bài: <b className="text-cyan-300 font-bold">{ztteam_formatNumber(totalCrawled)}</b></span>
+                <span className="text-cyan-400 font-bold hidden sm:inline">AI Factory</span>
+              </div>
+            </div>
+
+            {/** Card 4: Follower Mới & Tương Tác */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Follower Mới ({days}d)</p>
+                  <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-amber-300 transition-colors">
+                    {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.newFollowers || 0)}
+                  </h3>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">group_add</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Tương tác: <b className="text-amber-300 font-bold">{ztteam_formatNumber((data as any).overview?.totalEngagements || 0)}</b></span>
+                <span className="text-amber-400 font-bold hidden sm:inline">Growth</span>
+              </div>
+            </div>
+          </div>
+
+          {/** Biểu đồ Tổng hợp - 3 Columns */}
+          {isLoading ? (
+            <div className="bg-fb-surface py-20 w-full rounded-2xl shadow-lg flex flex-col items-center justify-center text-fb-text-muted">
+              <span className="material-symbols-outlined animate-spin text-4xl mb-2 text-fb-blue">refresh</span>
+              <span className="text-sm font-medium">Đang tải dữ liệu biểu đồ...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/** Crawled Card */}
+              <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
+                <div className="mb-4 flex justify-between items-start">
+                  <div>
+                    <p className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Bài Cào Về</p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
+                      {totalCrawled.toLocaleString()}
+                    </h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">language</span>
+                  </div>
+                </div>
+                <div className="h-48 w-full mt-auto">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="crawlGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }} />
+                      {crawlKeys.map((k, i) => (
+                        <Area 
+                          key={k} 
+                          type="monotone" 
+                          dataKey={k} 
+                          name={k.replace('crawl_', '')}
+                          stroke={ztteam_chartColors[i % ztteam_chartColors.length]} 
+                          fillOpacity={1} 
+                          fill="url(#crawlGrad)" 
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/** Created Card */}
+              <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
+                <div className="mb-4 flex justify-between items-start">
+                  <div>
+                    <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Reels Đã Tạo (AI)</p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
+                      {totalCreated.toLocaleString()}
+                    </h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">smart_toy</span>
+                  </div>
+                </div>
+                <div className="h-48 w-full mt-auto">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="createGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }} />
+                      {createKeys.map((k, i) => (
+                        <Area 
+                          key={k} 
+                          type="monotone" 
+                          dataKey={k} 
+                          name={k.replace('create_', '')}
+                          stroke={ztteam_chartColors[(i + 2) % ztteam_chartColors.length]} 
+                          fillOpacity={1} 
+                          fill="url(#createGrad)" 
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/** Published Card */}
+              <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
+                <div className="mb-4 flex justify-between items-start">
+                  <div>
+                    <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider mb-1">Reels Xuất Bản</p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
+                      {totalPublished.toLocaleString()}
+                    </h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">share</span>
+                  </div>
+                </div>
+                <div className="h-48 w-full mt-auto">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="pubGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }} />
+                      {pubKeys.map((k, i) => (
+                        <Area 
+                          key={k} 
+                          type="monotone" 
+                          dataKey={k} 
+                          name={k.replace('pub_', '')}
+                          stroke={ztteam_pubColors[i % ztteam_pubColors.length]} 
+                          fillOpacity={1} 
+                          fill="url(#pubGrad)" 
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
           )}
 
-          <CustomDropdown
-            value={selectedPageId}
-            onChange={(val) => setSelectedPageId(String(val))}
-            options={ztteam_pageOptions}
-            className="w-full sm:w-44"
-          />
-
-          <CustomDropdown
-            value={selectedSiteId}
-            onChange={(val) => setSelectedSiteId(String(val))}
-            options={ztteam_siteOptions}
-            className="w-full sm:w-44"
-          />
-
-          {/* Tab 7 ngày và 30 ngày chuẩn 100% Overview.tsx */}
-          <div className="grid grid-cols-2 gap-1 bg-fb-surface-hover p-1.5 rounded-full text-xs font-bold w-full sm:w-52 shrink-0">
-            <button 
-              onClick={() => setDays(7)} 
-              className={`w-full py-1.5 px-3 rounded-full text-xs text-center transition-all ${
-                days === 7 
-                  ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20' 
-                  : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
-              }`}
-            >
-              7 Ngày
-            </button>
-            <button 
-              onClick={() => setDays(30)} 
-              className={`w-full py-1.5 px-3 rounded-full text-xs text-center transition-all ${
-                days === 30 
-                  ? 'bg-gradient-to-r from-fb-blue to-cyan-500 text-white font-bold shadow-md shadow-blue-500/20' 
-                  : 'font-semibold text-fb-text-muted hover:text-fb-text hover:bg-white/5'
-              }`}
-            >
-              30 Ngày
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 4 Stat Cards Thống Kê Động 100% (Đồng bộ 100% với Overview.tsx) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-
-        {/* Card 1: Lượt Xem Video */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
-          <div className="flex justify-between items-start mb-2 sm:mb-3">
-            <div>
-              <p className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider">Lượt Xem Video</p>
-              <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-emerald-300 transition-colors">
-                {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.totalMediaViews || 0)}
-              </h3>
-            </div>
-            <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-lg sm:text-2xl">visibility</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-            <span className="truncate">Tiếp cận: <b className="text-emerald-300 font-bold">{ztteam_formatNumber((data as any).overview?.totalUniqueReach || 0)}</b></span>
-            <span className="text-emerald-400 font-bold hidden sm:inline">FB Insights</span>
-          </div>
-        </div>
-
-        {/* Card 2: Reels Đã Đăng */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-blue-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
-          <div className="flex justify-between items-start mb-2 sm:mb-3">
-            <div>
-              <p className="text-[10px] sm:text-xs font-black text-blue-400 uppercase tracking-wider">Reels Đã Đăng</p>
-              <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-blue-300 transition-colors">
-                {isLoading ? '...' : ztteam_formatNumber(totalPublished)}
-              </h3>
-            </div>
-            <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-fb-blue text-white rounded-xl shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-lg sm:text-2xl">post_add</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-            <span className="truncate">Xuất bản: <b className="text-blue-300 font-bold">{ztteam_formatNumber(totalPublished)}</b></span>
-            <span className="text-blue-400 font-bold hidden sm:inline">Auto Posted</span>
-          </div>
-        </div>
-
-        {/* Card 3: AI Reels Đã Tạo */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
-          <div className="flex justify-between items-start mb-2 sm:mb-3">
-            <div>
-              <p className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-wider">AI Reels Đã Tạo</p>
-              <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-cyan-300 transition-colors">
-                {isLoading ? '...' : ztteam_formatNumber(totalCreated)}
-              </h3>
-            </div>
-            <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-cyan-400 to-blue-600 text-white rounded-xl shadow-lg shadow-cyan-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-lg sm:text-2xl">auto_awesome</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-            <span className="truncate">Crawl bài: <b className="text-cyan-300 font-bold">{ztteam_formatNumber(totalCrawled)}</b></span>
-            <span className="text-cyan-400 font-bold hidden sm:inline">AI Factory</span>
-          </div>
-        </div>
-
-        {/* Card 4: Follower Mới & Tương Tác */}
-        <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
-          <div className="flex justify-between items-start mb-2 sm:mb-3">
-            <div>
-              <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Follower Mới ({days}d)</p>
-              <h3 className="text-xl sm:text-3xl font-black text-fb-text mt-0.5 sm:mt-1 group-hover:text-amber-300 transition-colors">
-                {isLoading ? '...' : ztteam_formatNumber((data as any).overview?.newFollowers || 0)}
-              </h3>
-            </div>
-            <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-lg sm:text-2xl">group_add</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-            <span className="truncate">Tương tác: <b className="text-amber-300 font-bold">{ztteam_formatNumber((data as any).overview?.totalEngagements || 0)}</b></span>
-            <span className="text-amber-400 font-bold hidden sm:inline">Growth</span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Biểu đồ Tổng hợp (Comprehensive Chart Frame) - 3 Columns */}
-      {isLoading ? (
-        <div className="bg-fb-surface py-20 w-full rounded-2xl shadow-lg flex flex-col items-center justify-center text-fb-text-muted">
-          <span className="material-symbols-outlined animate-spin text-4xl mb-2 text-fb-blue">refresh</span>
-          <span className="text-sm font-medium">Đang tải dữ liệu biểu đồ...</span>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          
-          {/* Crawled Card */}
-          <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
-            <div className="mb-4 flex justify-between items-start">
-              <div>
-                <p className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider mb-1">Bài Cào Về</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
-                  {totalCrawled.toLocaleString()}
-                </h3>
+          {/** 2 Columns Detail Section */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            {/** Leaderboard: Top Fanpages */}
+            <div className="bg-fb-surface p-5 rounded-2xl shadow-lg flex flex-col space-y-4">
+              <div className="flex items-center justify-between pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-fb-text tracking-tight">Bảng Xếp Hạng Fanpage</h3>
+                  <p className="text-xs text-fb-text-muted mt-0.5">Xếp hạng theo sản lượng xuất bản</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-lg">leaderboard</span>
+                </div>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-xl">language</span>
+
+              <div className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                {isLoading ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-fb-blue">refresh</span>
+                    <span className="text-xs font-medium">Đang tải bảng xếp hạng...</span>
+                  </div>
+                ) : data.leaderboard.length === 0 ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-fb-text-muted/50">hourglass_empty</span>
+                    <span className="text-xs font-medium">Chưa có dữ liệu Fanpage</span>
+                  </div>
+                ) : (
+                  data.leaderboard.map((page, index) => (
+                    <div 
+                      key={page.pageId}
+                      className="flex items-center justify-between p-3 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-5 text-center font-black text-xs shrink-0 ${
+                          index === 0 ? 'text-amber-400' : 
+                          index === 1 ? 'text-slate-300' : 
+                          index === 2 ? 'text-orange-400' : 
+                          'text-fb-text-muted'
+                        }`}>
+                          #{index + 1}
+                        </span>
+
+                        <div className="relative shrink-0">
+                          {page.avatar ? (
+                            <img 
+                              src={page.avatar} 
+                              alt={page.pageName} 
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.dataset.fallback) {
+                                  target.dataset.fallback = 'true';
+                                  target.src = `https://graph.facebook.com/${page.fbPageId || page.pageId}/picture?type=large`;
+                                }
+                              }}
+                              className="w-9 h-9 rounded-xl shadow-md object-cover" 
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-fb-blue text-white flex items-center justify-center font-bold text-xs shadow-md">
+                              FB
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 ml-3">
+                          <p className="text-xs sm:text-sm font-bold text-fb-text truncate leading-snug">{page.pageName}</p>
+                          <p className="text-[11px] text-fb-text-muted font-medium truncate mt-0.5">Đã đăng {page.published} bài</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <div className="flex items-center gap-1 bg-blue-500/15 text-blue-400 px-2 py-1 rounded-lg text-xs font-bold" title="Tổng lượt xem (Media Views)">
+                            <span className="material-symbols-outlined text-xs">visibility</span>
+                            <span>{ztteam_formatNumber(page.views || 0)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 bg-cyan-500/15 text-cyan-400 px-2 py-1 rounded-lg text-xs font-bold" title="Follower mới trong 7 ngày">
+                            <span className="material-symbols-outlined text-xs">person_add</span>
+                            <span>+{ztteam_formatNumber(page.newFollowers || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-            
-            <div className="h-60 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.chartData} syncId="reportSync" margin={{ top: 10, right: 0, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="reportCrawled" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }} itemStyle={{ fontSize: '12px', fontWeight: 'bold' }} labelStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', marginBottom: '2px' }} />
-                  {crawlKeys.map((key, idx) => (
-                    <Area key={key} type="monotone" name={key.replace('crawl_', '')} dataKey={key} stroke={ztteam_chartColors[idx % ztteam_chartColors.length]} fill="url(#reportCrawled)" strokeWidth={2} />
-                  ))}
-                  {crawlKeys.length === 0 && (
-                    <Area type="monotone" dataKey="crawled" name="Tải về (Crawl)" stroke="#06b6d4" fill="url(#reportCrawled)" strokeWidth={2} />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          
-          {/* Created Card */}
-          <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
-            <div className="mb-4 flex justify-between items-start">
-              <div>
-                <p className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-1">Tạo Thành Công</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
-                  {totalCreated.toLocaleString()}
-                </h3>
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-xl">movie_filter</span>
-              </div>
-            </div>
-            
-            <div className="h-60 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.chartData} syncId="reportSync" margin={{ top: 10, right: 0, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="reportCreated" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.05}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }} itemStyle={{ fontSize: '12px', fontWeight: 'bold' }} labelStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', marginBottom: '2px' }} />
-                  {createKeys.map((key, idx) => (
-                    <Area key={key} type="monotone" name={key.replace('create_', '')} dataKey={key} stroke={ztteam_pubColors[idx % ztteam_pubColors.length]} fill="url(#reportCreated)" strokeWidth={2} />
-                  ))}
-                  {createKeys.length === 0 && (
-                    <Area type="monotone" dataKey="created" name="Tạo nội dung" stroke="#f59e0b" fill="url(#reportCreated)" strokeWidth={2} />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
 
-          {/* Published Card */}
-          <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
-            <div className="mb-4 flex justify-between items-start">
-              <div>
-                <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Đã Đăng (Publish)</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-fb-text">
-                  {totalPublished.toLocaleString()}
-                </h3>
+            {/** Detailed Grid: Highlighted Posts */}
+            <div className="bg-fb-surface p-5 rounded-2xl shadow-lg xl:col-span-2 flex flex-col space-y-4">
+              <div className="flex items-center justify-between pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-fb-text tracking-tight">Video Nổi Bật Tương Tác Cao</h3>
+                  <p className="text-xs text-fb-text-muted mt-0.5">Top 15 video xu hướng trên hệ thống</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-lg">local_fire_department</span>
+                </div>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-xl">share</span>
+              
+              <div className="max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                {isLoading ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-fb-blue">refresh</span>
+                    <span className="text-xs font-medium">Đang tải video nổi bật...</span>
+                  </div>
+                ) : data.details.length === 0 ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-fb-text-muted/50">videocam_off</span>
+                    <span className="text-xs font-medium">Không có dữ liệu video nổi bật</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+                    {data.details.map((post, index) => (
+                      <div key={post.id} className="group relative flex items-start gap-3 p-3 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover transition-colors">
+                        <div className="absolute -left-1.5 -top-1.5 w-5 h-5 rounded-full bg-fb-surface shadow-md flex items-center justify-center z-10">
+                          <span className={`text-[9px] font-black ${
+                            index === 0 ? 'text-amber-400' : 
+                            index === 1 ? 'text-slate-300' : 
+                            index === 2 ? 'text-orange-400' : 
+                            'text-fb-text-muted'
+                          }`}>
+                            #{index + 1}
+                          </span>
+                        </div>
+
+                        <div className="w-14 h-20 rounded-lg bg-fb-surface-hover shrink-0 relative overflow-hidden shadow-sm">
+                          <img 
+                            src={post.thumbnail} 
+                            alt={post.title} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                            <span className="material-symbols-outlined text-white text-xl opacity-0 group-hover:opacity-100 transition-opacity">play_arrow</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0 flex flex-col h-20 justify-between py-0.5">
+                          <div>
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 mb-1">
+                              <span className="material-symbols-outlined text-[10px]">verified</span>
+                              <span className="text-[9px] font-bold uppercase tracking-wider truncate max-w-[120px]">{post.pageName}</span>
+                            </div>
+                            <p className="text-xs font-bold text-fb-text leading-tight line-clamp-2">
+                              {post.title}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 mt-auto">
+                            <div className="flex items-center gap-1 text-fb-text-muted text-xs font-bold">
+                              <span className="material-symbols-outlined text-xs">visibility</span>
+                              <span>{ztteam_formatNumber(post.views || 0)}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-rose-400 text-xs font-bold">
+                              <span className="material-symbols-outlined text-xs">favorite</span>
+                              <span>{ztteam_formatNumber(post.reactions || 0)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-            
-            <div className="h-60 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.chartData} syncId="reportSync" margin={{ top: 10, right: 0, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="reportPublished" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600}} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#f8fafc', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }} itemStyle={{ fontSize: '12px', fontWeight: 'bold' }} labelStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', marginBottom: '2px' }} />
-                  {pubKeys.map((key, idx) => (
-                    <Area key={key} type="monotone" name={key.replace('pub_', '')} dataKey={key} stroke={ztteam_pubColors[idx % ztteam_pubColors.length]} fill="url(#reportPublished)" strokeWidth={2} />
-                  ))}
-                  {pubKeys.length === 0 && (
-                    <Area type="monotone" dataKey="published" name="Đăng Fanpage" stroke="#10b981" fill="url(#reportPublished)" strokeWidth={2} />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
             </div>
           </div>
         </div>
       )}
 
-      {/* Leaderboard Fanpage & Top Video Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Leaderboard Fanpage */}
-        <div className="bg-fb-surface p-5 rounded-2xl shadow-lg xl:col-span-1 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-3">
-            <div>
-              <h3 className="text-base font-bold text-fb-text tracking-tight">Top Fanpage Xuất Sắc</h3>
-              <p className="text-xs text-fb-text-muted mt-0.5">Xếp hạng theo lượt xem & follower mới</p>
+      {/** TAB 2: GOOGLE ANALYTICS 4 REALTIME */}
+      {activeTab === 'ga4' && (
+        <div className="w-full space-y-6">
+          {/** Control Header */}
+          <div className="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+                <span className="material-symbols-outlined text-2xl">analytics</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Google Analytics 4 Realtime</h2>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-sm shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Live Streaming
+                  </span>
+                </div>
+                <p className="text-xs text-fb-text-muted font-medium mt-1">
+                  Đo lường độc giả online theo giây, bài viết đang đọc và nguồn Fanpage kéo traffic trực tiếp.
+                </p>
+              </div>
             </div>
-            <span className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/15 px-2.5 py-1 rounded-full shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Real-time
-            </span>
-          </div>
-          
-          <div className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
-            {isLoading ? (
-              <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
-                <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-fb-blue">refresh</span>
-                <span className="text-xs font-medium">Đang tải xếp hạng...</span>
-              </div>
-            ) : data.leaderboard.length === 0 ? (
-              <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
-                <span className="material-symbols-outlined text-4xl mb-2 text-fb-text-muted/50">hide_image</span>
-                <span className="text-xs font-medium">Chưa có dữ liệu Fanpage</span>
-              </div>
-            ) : (
-              data.leaderboard.map((page, index) => (
-                <div key={index} className="flex items-center p-3 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover transition-colors shadow-xs">
-                  {/* Rank Indicator */}
-                  <div className={`w-7 font-black text-lg text-center tracking-tighter shrink-0 ${
-                    index === 0 ? 'text-amber-400' :
-                    index === 1 ? 'text-slate-300' :
-                    index === 2 ? 'text-orange-400' :
-                    'text-fb-text-muted/50'
-                  }`}>
-                    {index + 1}
-                  </div>
-                  
-                  {/* Avatar */}
-                  <div className="relative shrink-0 ml-1">
-                    {page.avatar ? (
-                      <img 
-                        src={page.avatar} 
-                        alt="" 
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          if (!target.dataset.fallback) {
-                            target.dataset.fallback = 'true';
-                            target.src = `https://graph.facebook.com/${page.fbPageId || page.pageId}/picture?type=large`;
-                          }
-                        }}
-                        className="w-9 h-9 rounded-xl shadow-md object-cover" 
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-fb-blue text-white flex items-center justify-center font-bold text-xs shadow-md">
-                        FB
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Page Info */}
-                  <div className="flex-1 min-w-0 ml-3">
-                    <p className="text-xs sm:text-sm font-bold text-fb-text truncate leading-snug">{page.pageName}</p>
-                    <p className="text-[11px] text-fb-text-muted font-medium truncate mt-0.5">Đã đăng {page.published} bài</p>
-                  </div>
-                  
-                  {/* Stats Inline on Right */}
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    <div className="flex items-center gap-1 bg-blue-500/15 text-blue-400 px-2 py-1 rounded-lg text-xs font-bold" title="Tổng lượt xem (Media Views)">
-                      <span className="material-symbols-outlined text-xs">visibility</span>
-                      <span>{ztteam_formatNumber(page.views || 0)}</span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-cyan-500/15 text-cyan-400 px-2 py-1 rounded-lg text-xs font-bold" title="Follower mới trong 7 ngày">
-                      <span className="material-symbols-outlined text-xs">person_add</span>
-                      <span>+{ztteam_formatNumber(page.newFollowers || 0)}</span>
-                    </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="w-full sm:w-60">
+                <CustomDropdown
+                  value={selectedGASiteId}
+                  onChange={(val) => setSelectedGASiteId(String(val))}
+                  options={ztteam_gaSiteOptions}
+                  className="w-full"
+                />
+              </div>
+
+              <button
+                onClick={() => ztteam_fetchGAStats()}
+                disabled={isLoadingGA}
+                className="p-2.5 rounded-full bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text transition-all shrink-0 shadow-sm disabled:opacity-50"
+                title="Làm mới dữ liệu"
+              >
+                <span className={`material-symbols-outlined text-lg ${isLoadingGA ? 'animate-spin text-fb-blue' : ''}`}>sync</span>
+              </button>
+
+              {isAdmin && (
+                <button
+                  onClick={() => setIsGAConfigOpen(true)}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-fb-blue to-cyan-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-md hover:opacity-95 transition-all shrink-0 shadow-blue-500/20"
+                >
+                  <span className="material-symbols-outlined text-base">settings</span>
+                  <span>Cài Đặt GA4</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/** Cảnh báo nếu chưa cấu hình GA4 */}
+          {gaStats && !gaStats.configured && (
+            <div className="bg-gradient-to-br from-fb-surface to-blue-950/20 border border-fb-blue/20 rounded-2xl p-6 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-fb-blue/15 text-fb-blue flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">info</span>
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-fb-text">Chưa hoàn tất kết nối Google Analytics 4</h4>
+                  <p className="text-xs text-fb-text-muted mt-1 max-w-xl">
+                    {gaStats.message || 'Vui lòng cung cấp Service Account JSON từ Google Cloud và Property ID để kích hoạt báo cáo Realtime.'}
+                  </p>
+                </div>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setIsGAConfigOpen(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-fb-blue to-cyan-500 text-white text-xs font-bold rounded-full shadow-lg hover:opacity-95 transition-all shrink-0"
+                >
+                  Mở Cài Đặt GA4 Ngay
+                </button>
+              )}
+            </div>
+          )}
+
+          {/** 4 GA4 Metric Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/** Card 1: Độc giả online */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-emerald-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider">Đang Online (Realtime)</p>
+                  <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
+                    <h3 className="text-2xl sm:text-4xl font-black text-fb-text group-hover:text-emerald-300 transition-colors">
+                      {isLoadingGA && !gaStats ? '...' : (gaStats?.activeUsers || 0).toLocaleString()}
+                    </h3>
+                    <span className="text-xs font-bold text-emerald-400">người</span>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Detailed Grid: Highlighted Posts */}
-        <div className="bg-fb-surface p-5 rounded-2xl shadow-lg xl:col-span-2 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-3">
-            <div>
-              <h3 className="text-base font-bold text-fb-text tracking-tight">Video Nổi Bật Tương Tác Cao</h3>
-              <p className="text-xs text-fb-text-muted mt-0.5">Top 15 video xu hướng trên hệ thống</p>
-            </div>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg">local_fire_department</span>
-            </div>
-          </div>
-          
-          <div className="max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
-            {isLoading ? (
-              <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
-                <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-fb-blue">refresh</span>
-                <span className="text-xs font-medium">Đang tải video nổi bật...</span>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">person</span>
+                </div>
               </div>
-            ) : data.details.length === 0 ? (
-              <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
-                <span className="material-symbols-outlined text-4xl mb-2 text-fb-text-muted/50">videocam_off</span>
-                <span className="text-xs font-medium">Không có dữ liệu video nổi bật</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-emerald-300 font-bold">Người dùng trực tiếp</span>
+                </span>
+                <span className="text-fb-text-muted font-medium">GA4 Live</span>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-                {data.details.map((post, index) => (
-                  <div key={post.id} className="group relative flex items-start gap-3 p-3 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover transition-colors">
-                    
-                    {/* Rank Badge */}
-                    <div className="absolute -left-1.5 -top-1.5 w-5 h-5 rounded-full bg-fb-surface shadow-md flex items-center justify-center z-10">
-                      <span className={`text-[9px] font-black ${
-                        index === 0 ? 'text-amber-400' : 
-                        index === 1 ? 'text-slate-300' : 
-                        index === 2 ? 'text-orange-400' : 
-                        'text-fb-text-muted'
-                      }`}>
-                        #{index + 1}
-                      </span>
-                    </div>
+            </div>
 
-                    {/* Thumbnail */}
-                    <div className="w-14 h-20 rounded-lg bg-fb-surface-hover shrink-0 relative overflow-hidden shadow-sm">
-                      <img 
-                        src={post.thumbnail} 
-                        alt={post.title} 
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                      />
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                        <span className="material-symbols-outlined text-white text-xl opacity-0 group-hover:opacity-100 transition-opacity">play_arrow</span>
-                      </div>
-                    </div>
-                    
-                    {/* Details */}
-                    <div className="flex-1 min-w-0 flex flex-col h-20 justify-between py-0.5">
-                      <div>
-                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 mb-1">
-                          <span className="material-symbols-outlined text-[10px]">verified</span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider truncate max-w-[120px]">{post.pageName}</span>
-                        </div>
-                        <p className="text-xs font-bold text-fb-text leading-tight line-clamp-2">
-                          {post.title}
-                        </p>
-                      </div>
-                      
-                      {/* Stats */}
-                      <div className="flex items-center gap-3 mt-auto">
-                        <div className="flex items-center gap-1 text-fb-text-muted text-xs font-bold">
-                          <span className="material-symbols-outlined text-xs">visibility</span>
-                          <span>{ztteam_formatNumber(post.views || 0)}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-rose-400 text-xs font-bold">
-                          <span className="material-symbols-outlined text-xs">favorite</span>
-                          <span>{ztteam_formatNumber(post.reactions || 0)}</span>
-                        </div>
-                      </div>
-                    </div>
+            {/** Card 2: Lượt xem trang 30 phút */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-blue-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-blue-400 uppercase tracking-wider">Lượt Xem (30 Phút)</p>
+                  <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
+                    <h3 className="text-2xl sm:text-4xl font-black text-fb-text group-hover:text-blue-300 transition-colors">
+                      {isLoadingGA && !gaStats ? '...' : (gaStats?.pageViews || 0).toLocaleString()}
+                    </h3>
+                    <span className="text-xs font-bold text-blue-400">views</span>
                   </div>
-                ))}
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-fb-blue text-white rounded-xl shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">pageview</span>
+                </div>
               </div>
-            )}
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Tải trang 30 phút qua</span>
+                <span className="text-blue-400 font-bold">PageViews</span>
+              </div>
+            </div>
+
+            {/** Card 3: Nguồn Fanpage & Chiến dịch */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-wider">Nguồn Traffic / Chiến Dịch</p>
+                  <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
+                    <h3 className="text-2xl sm:text-4xl font-black text-fb-text group-hover:text-cyan-300 transition-colors">
+                      {isLoadingGA && !gaStats ? '...' : (gaStats?.topCampaigns?.length || 0)}
+                    </h3>
+                    <span className="text-xs font-bold text-cyan-400">nguồn</span>
+                  </div>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-cyan-400 to-blue-600 text-white rounded-xl shadow-lg shadow-cyan-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">campaign</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Top: <b className="text-cyan-300 font-bold">{gaStats?.topCampaigns?.[0]?.campaign || 'Direct / Organic'}</b></span>
+                <span className="text-cyan-400 font-bold">UTM Source</span>
+              </div>
+            </div>
+
+            {/** Card 4: Quốc gia */}
+            <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-amber-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
+              <div className="flex justify-between items-start mb-2 sm:mb-3">
+                <div>
+                  <p className="text-[10px] sm:text-xs font-black text-amber-400 uppercase tracking-wider">Quốc Gia Đang Đọc</p>
+                  <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
+                    <h3 className="text-2xl sm:text-4xl font-black text-fb-text group-hover:text-amber-300 transition-colors">
+                      {isLoadingGA && !gaStats ? '...' : (gaStats?.topCountries?.length || 0)}
+                    </h3>
+                    <span className="text-xs font-bold text-amber-400">quốc gia</span>
+                  </div>
+                </div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">public</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
+                <span className="truncate">Nhiều nhất: <b className="text-amber-300 font-bold">{gaStats?.topCountries?.[0]?.country || 'Vietnam'}</b></span>
+                <span className="text-amber-400 font-bold">Geo Location</span>
+              </div>
+            </div>
+          </div>
+
+          {/** Biểu đồ xu hướng 30 phút qua */}
+          <div className="bg-fb-surface p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lưu Lượng Theo Phút (30 Phút Gần Nhất)</p>
+                <h3 className="text-xl sm:text-2xl font-black text-fb-text">
+                  {(gaStats?.activeUsers || 0).toLocaleString()} <span className="text-xs font-medium text-fb-text-muted">người dùng hoạt động trực tiếp</span>
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span className="text-xs font-bold text-emerald-400">Live 30m</span>
+              </div>
+            </div>
+            
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ztteam_minuteChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="ztteam_gaUserGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis 
+                    dataKey="minuteLabel" 
+                    stroke="#64748b" 
+                    fontSize={11} 
+                    tickLine={false}
+                    interval={4}
+                  />
+                  <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
+                    formatter={(value: any) => [`${value} người dùng`, 'Đang online']}
+                    labelFormatter={(label) => `Thời gian: ${label}`}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="activeUsers" 
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    fillOpacity={1} 
+                    fill="url(#ztteam_gaUserGrad)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/** Bảng chi tiết: Top Bài Viết & Nguồn Traffic */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            {/** Cột 1: Top Bài Viết Đang Được Đọc Nhiều Nhất (xl:col-span-2) */}
+            <div className="bg-fb-surface p-5 rounded-2xl shadow-lg xl:col-span-2 flex flex-col space-y-4">
+              <div className="flex items-center justify-between pb-2">
+                <div>
+                  <h3 className="text-base font-bold text-fb-text tracking-tight">Top Bài Viết Đang Được Đọc Nhiều Nhất</h3>
+                  <p className="text-xs text-fb-text-muted mt-0.5">Xếp theo số độc giả đang xem trang cùng thời điểm</p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-lg">auto_stories</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 max-h-[560px] overflow-y-auto custom-scrollbar pr-1">
+                {isLoadingGA && !gaStats ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-fb-blue">refresh</span>
+                    <span className="text-xs font-medium">Đang kết nối lấy dữ liệu GA4...</span>
+                  </div>
+                ) : !gaStats?.topPages || gaStats.topPages.length === 0 ? (
+                  <div className="py-12 text-center text-fb-text-muted flex flex-col items-center">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-fb-text-muted/50">hourglass_empty</span>
+                    <span className="text-xs font-medium">Chưa có lượt đọc bài thời gian thực</span>
+                  </div>
+                ) : (
+                  gaStats.topPages.map((item: any, idx: number) => {
+                    const fullUrl = gaStats.siteUrl ? `${gaStats.siteUrl.replace(/\/$/, '')}${item.pagePath}` : item.pagePath;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3.5 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover transition-colors gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-5 text-center font-black text-xs shrink-0 ${
+                            idx === 0 ? 'text-amber-400' :
+                            idx === 1 ? 'text-slate-300' :
+                            idx === 2 ? 'text-orange-400' :
+                            'text-fb-text-muted'
+                          }`}>
+                            #{idx + 1}
+                          </span>
+
+                          <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-bold text-fb-text truncate leading-snug">
+                              {item.title || item.pagePath}
+                            </p>
+                            <p className="text-[11px] text-fb-text-muted font-mono truncate mt-0.5">
+                              {item.pagePath}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>{item.activeUsers}</span>
+                          </span>
+
+                          {gaStats.siteUrl && (
+                            <a
+                              href={fullUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-7 h-7 rounded-lg bg-fb-surface hover:bg-blue-500/20 text-fb-text-muted hover:text-blue-400 flex items-center justify-center transition-colors"
+                              title="Mở xem bài viết"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/** Cột 2: Top Nguồn Traffic & Top Quốc Gia */}
+            <div className="space-y-5 flex flex-col">
+              {/** Nguồn Fanpage & Campaign */}
+              <div className="bg-fb-surface p-5 rounded-2xl shadow-lg flex flex-col space-y-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/60">
+                  <div>
+                    <h3 className="text-base font-bold text-fb-text tracking-tight">Chiến Dịch &amp; Nguồn Kéo Traffic</h3>
+                    <p className="text-xs text-fb-text-muted mt-0.5">Theo dõi nguồn UTM &amp; Fanpage</p>
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-lg">track_changes</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1">
+                  {!gaStats?.topCampaigns || gaStats.topCampaigns.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-fb-text-muted">Chưa có dữ liệu nguồn traffic</p>
+                  ) : (
+                    gaStats.topCampaigns.map((camp: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-fb-surface-hover/50 text-xs">
+                        <div className="min-w-0 pr-2">
+                          <p className="font-bold text-fb-text truncate">{camp.campaign || '(not set)'}</p>
+                          <p className="text-[10px] text-fb-text-muted truncate mt-0.5">{camp.source || 'direct'}</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-cyan-500/15 text-cyan-400 shrink-0">
+                          {camp.activeUsers} online
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/** Top Quốc Gia */}
+              <div className="bg-fb-surface p-5 rounded-2xl shadow-lg flex flex-col space-y-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/60">
+                  <div>
+                    <h3 className="text-base font-bold text-fb-text tracking-tight">Vị Trí Quốc Gia</h3>
+                    <p className="text-xs text-fb-text-muted mt-0.5">Vị trí địa lý của độc giả online</p>
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-lg">public</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1">
+                  {!gaStats?.topCountries || gaStats.topCountries.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-fb-text-muted">Chưa có dữ liệu vị trí</p>
+                  ) : (
+                    gaStats.topCountries.map((c: any, idx: number) => {
+                      const totalUsers = gaStats?.activeUsers || 1;
+                      const percent = Math.min(100, Math.round((c.activeUsers / totalUsers) * 100));
+                      return (
+                        <div key={idx} className="p-2.5 rounded-xl bg-fb-surface-hover/50 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-fb-text truncate">{c.country}</span>
+                            <span className="font-black text-amber-400">{c.activeUsers} ({percent}%)</span>
+                          </div>
+                          <div className="w-full bg-black/30 rounded-full h-1.5 overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-amber-400 to-orange-500 h-1.5 rounded-full transition-all duration-500" 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/** Modal Cài Đặt GA4 */}
+      <ZTTeamGAConfigModal
+        isOpen={isGAConfigOpen}
+        onClose={() => setIsGAConfigOpen(false)}
+        onSaved={() => ztteam_fetchGAStats()}
+      />
     </div>
   );
 }

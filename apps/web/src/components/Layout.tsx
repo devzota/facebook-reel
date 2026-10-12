@@ -6,6 +6,7 @@ import UIProvider from './UIProvider';
 import { useUIStore } from '../stores/uiStore';
 import { ztteam_decodeHtmlEntity } from '../utils/stringUtils';
 import api from '../services/api';
+import ZTTeamRealtimeWidget from './RealtimeWidget';
 
 interface ZTTeamSangTaoQuotaData {
     email?: string;
@@ -226,6 +227,9 @@ export default function Layout() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/** Google Analytics 4 Realtime Online Badge */}
+                    <ZTTeamRealtimeWidget />
+
                     {/** SangTao.ai Quota Compact Badge */}
                     <div className="relative">
                         <button

@@ -7,6 +7,7 @@ interface TargetSite {
   wp_username: string;
   status: string;
   is_manual?: boolean;
+  ga4_property_id?: string;
   created_at: string;
   _count?: {
     crawl_sources: number;
@@ -18,8 +19,8 @@ interface WordpressState {
   isLoading: boolean;
   error: string | null;
   ztteam_fetchSites: () => Promise<void>;
-  ztteam_createSite: (data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }) => Promise<void>;
-  ztteam_updateSite: (id: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }) => Promise<void>;
+  ztteam_createSite: (data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean; ga4PropertyId?: string }) => Promise<void>;
+  ztteam_updateSite: (id: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean; ga4PropertyId?: string }) => Promise<void>;
   ztteam_toggleSiteManual: (id: string, isManual: boolean) => Promise<void>;
   ztteam_deleteSite: (id: string) => Promise<void>;
   ztteam_testConnection: (data: { wpUrl: string; wpUsername: string; wpAppPassword?: string }) => Promise<any>;

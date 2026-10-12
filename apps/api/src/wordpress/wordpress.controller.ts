@@ -13,7 +13,7 @@ export class ZTTeamWordpressController {
   }
 
   @Post('sites')
-  ztteam_createSite(@Body() body: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }, @Request() req: any) {
+  ztteam_createSite(@Body() body: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean; ga4PropertyId?: string }, @Request() req: any) {
     return this.wordpressService.ztteam_createTargetSite(req.user.sub, body);
   }
 
@@ -23,7 +23,7 @@ export class ZTTeamWordpressController {
   }
 
   @Patch('sites/:id')
-  ztteam_updateSite(@Param('id') id: string, @Body() body: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }, @Request() req: any) {
+  ztteam_updateSite(@Param('id') id: string, @Body() body: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean; ga4PropertyId?: string }, @Request() req: any) {
     return this.wordpressService.ztteam_updateTargetSite(req.user.sub, id, body);
   }
 
