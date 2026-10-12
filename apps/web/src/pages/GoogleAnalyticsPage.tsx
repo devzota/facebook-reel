@@ -551,60 +551,60 @@ export default function GoogleAnalyticsPage() {
                 {/** 3. HÀNG 4 THẺ CHỈ SỐ ĐO LƯỜNG (CHUẨN HÌNH 2 - DÙNG SỐ LIỆU THẬT GA4) */}
                 <ZTTeamSiteMetricCards site={site} />
 
-                {/** 4. NỘI DUNG REALTIME: TOP QUỐC GIA & TOP BÀI VIẾT (2 CỘT GỌN GÀNG) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                  {/** Ở nước nào */}
-                  <div className="bg-fb-surface-hover/20 p-4 rounded-2xl flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2.5">
+                {/** 4. NỘI DUNG REALTIME: 2 HÀNG DỌC (QUỐC GIA & BÀI VIẾT) */}
+                <div className="space-y-3 pt-1">
+                  {/** Hàng 1: Quốc Gia */}
+                  <div className="bg-fb-surface-hover/20 p-3.5 rounded-2xl">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
                       <span className="flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-xs text-cyan-400">public</span>
-                        <span>Quốc Gia Đang Truy Cập</span>
+                        <span>Quốc Gia</span>
                       </span>
                       <span>Online</span>
                     </div>
 
                     {site.topCountries && site.topCountries.length > 0 ? (
-                      <div className="space-y-1.5 flex-1">
-                        {site.topCountries.slice(0, 4).map((countryItem, idx) => (
-                          <div
+                      <div className="flex flex-wrap gap-1.5">
+                        {site.topCountries.slice(0, 5).map((countryItem, idx) => (
+                          <span
                             key={idx}
-                            className="flex items-center justify-between px-3 py-1.5 rounded-full bg-fb-surface-hover/50 text-xs"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-fb-surface-hover/50 text-xs"
                           >
-                            <span className="font-semibold text-fb-text truncate max-w-[170px]">
+                            <span className="font-semibold text-fb-text truncate max-w-[130px]">
                               {countryItem.country}
                             </span>
-                            <span className="font-mono font-bold text-cyan-400 shrink-0 ml-2">
-                              {countryItem.activeUsers}
+                            <span className="font-mono font-bold text-cyan-400">
+                              +{countryItem.activeUsers}
                             </span>
-                          </div>
+                          </span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-3 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-1.5 text-center">
                         Chưa ghi nhận quốc gia
                       </p>
                     )}
                   </div>
 
-                  {/** Title bài viết đang online là gì */}
-                  <div className="bg-fb-surface-hover/20 p-4 rounded-2xl flex flex-col justify-between">
-                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2.5">
+                  {/** Hàng 2: Bài Viết */}
+                  <div className="bg-fb-surface-hover/20 p-3.5 rounded-2xl">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
                       <span className="flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-xs text-emerald-400">article</span>
-                        <span>Bài Viết Đang Được Đọc</span>
+                        <span>Bài Viết</span>
                       </span>
                       <span>Online</span>
                     </div>
 
                     {site.topArticles && site.topArticles.length > 0 ? (
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 flex-1">
+                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                         {site.topArticles.slice(0, 4).map((article, idx) => (
                           <div
                             key={idx}
                             className="flex items-start justify-between gap-2 px-3 py-1.5 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover text-xs transition-colors"
                           >
                             <span
-                              className="font-medium text-fb-text line-clamp-1 text-[11px]"
+                              className="font-medium text-fb-text line-clamp-1 text-[11px] flex-1"
                               title={article.title}
                             >
                               {article.title}
@@ -616,7 +616,7 @@ export default function GoogleAnalyticsPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-3 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-1.5 text-center">
                         Chưa có độc giả đọc bài
                       </p>
                     )}
