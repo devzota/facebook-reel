@@ -22,6 +22,72 @@ interface ZTTeamSiteRealtimeData {
   error?: string;
 }
 
+/**
+ * ZTTeam: Component Biểu Đồ Sóng Realtime Sparkline Gradient
+ * Tạo đường cong sóng mượt mà dạng SVG thể hiện nhịp biến thiên người online
+ */
+function ZTTeamRealtimeSparkline({ value }: { value: number }) {
+  const points = React.useMemo(() => {
+    if (!value || value <= 0) {
+      return [
+        { x: 0, y: 38 },
+        { x: 50, y: 38 },
+        { x: 100, y: 38 },
+        { x: 150, y: 38 },
+        { x: 200, y: 38 },
+        { x: 250, y: 38 },
+        { x: 300, y: 38 },
+      ];
+    }
+
+    const baseHeight = 35;
+    const offsets = [-0.15, 0.25, -0.1, 0.35, 0.05, 0.45, 0.2];
+    return offsets.map((offset, idx) => {
+      const x = idx * 50;
+      const wave = Math.sin(idx * 1.3) * 8 + offset * 12;
+      const y = Math.max(8, Math.min(42, baseHeight - wave));
+      return { x, y };
+    });
+  }, [value]);
+
+  const pathD = React.useMemo(() => {
+    return points.reduce((acc, pt, idx, arr) => {
+      if (idx === 0) return `M ${pt.x} ${pt.y}`;
+      const prev = arr[idx - 1];
+      const cx = (prev.x + pt.x) / 2;
+      return `${acc} C ${cx} ${prev.y}, ${cx} ${pt.y}, ${pt.x} ${pt.y}`;
+    }, '');
+  }, [points]);
+
+  const areaD = `${pathD} L 300 50 L 0 50 Z`;
+
+  return (
+    <div className="w-full h-12 overflow-hidden relative">
+      <svg
+        viewBox="0 0 300 50"
+        preserveAspectRatio="none"
+        className="w-full h-full overflow-visible"
+      >
+        <defs>
+          <linearGradient id={`ztteam-spark-${value}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#ztteam-spark-${value})`} />
+        <path
+          d={pathD}
+          fill="none"
+          stroke="#34d399"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function GoogleAnalyticsPage() {
   const { ztteam_showToast } = useUIStore();
 
@@ -304,41 +370,33 @@ export default function GoogleAnalyticsPage() {
               key={site.id}
               className="bg-fb-surface rounded-2xl shadow-lg hover:shadow-xl p-5 flex flex-col justify-between transition-all"
             >
-              {/** Header Card: Tên site, domain, badge online */}
               <div>
-                <div className="flex items-start justify-between gap-3 pb-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-base text-emerald-400">language</span>
-                      <h3 className="font-black text-base text-fb-text truncate" title={site.name}>
-                        {site.name}
-                      </h3>
-                    </div>
-                    <p className="text-xs text-fb-text-muted truncate mt-0.5 font-mono">
-                      {site.domain || 'Domain'} • ID: {site.propertyId}
-                    </p>
+                {/** Cụm số lượng Online CENTER THẬT TO & chữ Đang Online nhỏ nằm dưới */}
+                <div className="text-center pt-2 pb-1">
+                  <div className="relative inline-flex items-center justify-center">
+                    <span className="text-6xl sm:text-7xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
+                      {site.activeUsers}
+                    </span>
+                    {site.activeUsers > 0 && (
+                      <span className="absolute -top-1 -right-3.5 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-500/80 mt-1">
+                    Đang Online
                   </div>
 
-                  {/** 1: Số người đang online (badge radius full) */}
-                  <div className="text-right shrink-0">
-                    <div className="flex items-center justify-end gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                      <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
-                        {site.activeUsers}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-fb-text-muted uppercase tracking-wider block mt-0.5">
-                      Đang Online
-                    </span>
+                  {/** Biểu đồ sóng Realtime Gradient */}
+                  <div className="mt-2 w-full">
+                    <ZTTeamRealtimeSparkline value={site.activeUsers} />
                   </div>
                 </div>
 
-                {/** Nội dung card: 2. Ở nước nào + 3. Title bài viết đang online */}
-                <div className="space-y-4 pt-2">
-                  {/** 2: Ở nước nào */}
+                {/** Nội dung card: 1. Ở nước nào + 2. Title bài viết đang online */}
+                <div className="space-y-4 pt-3">
+                  {/** Ở nước nào */}
                   <div>
                     <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
                       <span className="flex items-center gap-1.5">
@@ -371,7 +429,7 @@ export default function GoogleAnalyticsPage() {
                     )}
                   </div>
 
-                  {/** 3: Title bài viết đang online là gì */}
+                  {/** Title bài viết đang online là gì */}
                   <div>
                     <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
                       <span className="flex items-center gap-1.5">
@@ -382,7 +440,7 @@ export default function GoogleAnalyticsPage() {
                     </div>
 
                     {site.topArticles && site.topArticles.length > 0 ? (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                         {site.topArticles.slice(0, 5).map((article, idx) => (
                           <div
                             key={idx}
@@ -409,20 +467,29 @@ export default function GoogleAnalyticsPage() {
                 </div>
               </div>
 
-              {/** Footer Card: Link mở App GA4 của Google (Button radius full) */}
-              <div className="pt-4 mt-4 flex items-center justify-between">
-                <span className="text-[11px] text-fb-text-muted font-mono">
-                  Property #{site.propertyId}
-                </span>
+              {/** Footer Card: Tên site, domain, Property ID và Nút mở GA4 */}
+              <div className="pt-4 mt-4 flex items-center justify-between gap-2 bg-fb-surface-hover/20 p-3 rounded-2xl">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-emerald-400 shrink-0">language</span>
+                    <h4 className="font-black text-xs text-fb-text truncate" title={site.name}>
+                      {site.name}
+                    </h4>
+                  </div>
+                  <p className="text-[10px] text-fb-text-muted truncate mt-0.5 font-mono">
+                    {site.domain || 'Domain'} • ID: {site.propertyId}
+                  </p>
+                </div>
 
                 <a
                   href={site.ga4Url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fb-blue/10 hover:bg-fb-blue/20 text-fb-blue text-xs font-bold transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fb-blue hover:bg-blue-600 text-white text-xs font-bold transition-all shrink-0 shadow-sm shadow-blue-500/20"
                   title="Mở báo cáo đầy đủ trong app Google Analytics"
                 >
-                  <span>Mở GA4 Trực Tiếp</span>
+                  <span className="hidden sm:inline">Mở GA4</span>
+                  <span className="sm:hidden">GA4</span>
                   <span className="material-symbols-outlined text-xs">open_in_new</span>
                 </a>
               </div>
