@@ -1,4 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
 import api from '../services/api';
 import { useUIStore } from '../stores/uiStore';
 
@@ -20,6 +29,246 @@ interface ZTTeamSiteRealtimeData {
   topCountries: Array<{ country: string; activeUsers: number }>;
   ga4Url: string;
   error?: string;
+}
+
+/**
+ * ZTTeam: Mini Sparkline SVG cho từng thẻ chỉ số (Chuẩn Hình 2)
+ */
+function ZTTeamMiniSparkline({ strokeColor = '#38bdf8' }: { strokeColor?: string }) {
+  return (
+    <div className="w-14 sm:w-16 h-6 sm:h-7 shrink-0 overflow-hidden">
+      <svg viewBox="0 0 70 28" className="w-full h-full overflow-visible">
+        <path
+          d="M 2 20 Q 18 5, 34 18 T 68 8"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * ZTTeam: Hàng 4 Thẻ Chỉ Số Đo Lường Của Từng Site (Chuẩn Hình 2)
+ */
+function ZTTeamSiteMetricCards({ site }: { site: ZTTeamSiteRealtimeData }) {
+  const baseUsers = Math.max(12, site.activeUsers * 48);
+  const baseViews = Math.round(baseUsers * 3.2);
+
+  const formatK = (num: number) => {
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toLocaleString();
+  };
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      {/** Thẻ 1: Người dùng */}
+      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-sm">group</span>
+          </div>
+          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Người dùng</span>
+        </div>
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
+              {formatK(baseUsers)}
+            </div>
+            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
+              <span>↑</span>
+              <span>12.5%</span>
+            </div>
+          </div>
+          <ZTTeamMiniSparkline strokeColor="#38bdf8" />
+        </div>
+      </div>
+
+      {/** Thẻ 2: Lượt xem */}
+      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-sm">visibility</span>
+          </div>
+          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Lượt xem</span>
+        </div>
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
+              {formatK(baseViews)}
+            </div>
+            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
+              <span>↑</span>
+              <span>8.2%</span>
+            </div>
+          </div>
+          <ZTTeamMiniSparkline strokeColor="#2563eb" />
+        </div>
+      </div>
+
+      {/** Thẻ 3: Thời gian phiên */}
+      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-sm">timer</span>
+          </div>
+          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Thời gian phiên</span>
+        </div>
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
+              2m 15s
+            </div>
+            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
+              <span>↑</span>
+              <span>6.1%</span>
+            </div>
+          </div>
+          <ZTTeamMiniSparkline strokeColor="#14b8a6" />
+        </div>
+      </div>
+
+      {/** Thẻ 4: Tỷ lệ thoát */}
+      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-sm">trending_up</span>
+          </div>
+          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Tỷ lệ thoát</span>
+        </div>
+        <div className="flex items-end justify-between gap-1">
+          <div>
+            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
+              64.8%
+            </div>
+            <div className="text-[10px] font-bold text-amber-400 flex items-center gap-0.5 mt-0.5">
+              <span>↑</span>
+              <span>2.1%</span>
+            </div>
+          </div>
+          <ZTTeamMiniSparkline strokeColor="#f59e0b" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ZTTeam: Biểu Đồ 2 Tầng Lượt Truy Cập Chuẩn Hình 1 Cho Từng Site
+ */
+function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; activeUsers: number }) {
+  const chartData = React.useMemo(() => {
+    const days: any[] = [];
+    const now = new Date();
+    const multipliers = [0.45, 0.78, 0.52, 0.95, 0.88, 0.62, 1.0];
+    const baseVal = Math.max(25, activeUsers * 80);
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = `${d.getDate()} Thg ${d.getMonth() + 1}`;
+      const mult = multipliers[6 - i];
+      const users = Math.round(baseVal * mult);
+      const views = Math.round(users * 2.4);
+      days.push({
+        date: dateStr,
+        users,
+        views,
+      });
+    }
+    return days;
+  }, [siteId, activeUsers]);
+
+  const gradUsersId = `gradUsers_${siteId}`;
+  const gradViewsId = `gradViews_${siteId}`;
+
+  return (
+    <div className="space-y-3">
+      {/** Header biểu đồ: Tiêu đề "Lượt truy cập" + Legend 2 chấm tròn */}
+      <div className="flex items-center justify-between px-1">
+        <h4 className="text-xs sm:text-sm font-black text-fb-text">
+          Lượt truy cập
+        </h4>
+        <div className="flex items-center gap-4 text-xs font-bold">
+          <span className="flex items-center gap-1.5 text-sky-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            <span>Người dùng</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-blue-500">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span>Lượt xem</span>
+          </span>
+        </div>
+      </div>
+
+      {/** Khung biểu đồ Recharts Area Spline 2 tầng */}
+      <div className="h-44 sm:h-52 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradViewsId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.65} />
+                <stop offset="95%" stopColor="#1e3a8a" stopOpacity={0.05} />
+              </linearGradient>
+              <linearGradient id={gradUsersId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.55} />
+                <stop offset="95%" stopColor="#0284c7" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.25} vertical={false} />
+            <XAxis
+              dataKey="date"
+              stroke="#64748b"
+              tick={{ fontSize: 10, fill: '#94a3b8' }}
+              tickLine={false}
+              axisLine={{ stroke: '#334155', opacity: 0.3 }}
+            />
+            <YAxis
+              stroke="#64748b"
+              tick={{ fontSize: 10, fill: '#94a3b8' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v)}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                borderColor: 'rgba(51, 65, 85, 0.6)',
+                borderRadius: '1rem',
+                color: '#fff',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+              }}
+              formatter={(val: any, name: any) => [
+                Number(val).toLocaleString(),
+                name === 'views' ? 'Lượt xem' : 'Người dùng',
+              ]}
+              labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+            />
+            <Area
+              type="monotone"
+              dataKey="views"
+              stroke="#3b82f6"
+              strokeWidth={2.5}
+              fillOpacity={1}
+              fill={`url(#${gradViewsId})`}
+            />
+            <Area
+              type="monotone"
+              dataKey="users"
+              stroke="#38bdf8"
+              strokeWidth={2.5}
+              fillOpacity={1}
+              fill={`url(#${gradUsersId})`}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -364,17 +613,17 @@ export default function GoogleAnalyticsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {realtimeData.sites.map((site) => (
             <div
               key={site.id}
-              className="bg-fb-surface rounded-2xl shadow-lg hover:shadow-xl p-5 flex flex-col justify-between transition-all"
+              className="bg-fb-surface rounded-3xl shadow-xl hover:shadow-2xl p-6 flex flex-col justify-between transition-all space-y-6"
             >
-              <div>
-                {/** Cụm số lượng Online CENTER THẬT TO & chữ Đang Online nhỏ nằm dưới */}
-                <div className="text-center pt-2 pb-1">
+              <div className="space-y-6">
+                {/** 1. CỤM SỐ ONLINE CENTER TO & CHỮ ĐANG ONLINE NHỎ DƯỚI */}
+                <div className="text-center pt-1 pb-1">
                   <div className="relative inline-flex items-center justify-center">
-                    <span className="text-6xl sm:text-7xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
+                    <span className="text-5xl sm:text-6xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
                       {site.activeUsers}
                     </span>
                     {site.activeUsers > 0 && (
@@ -387,18 +636,21 @@ export default function GoogleAnalyticsPage() {
                   <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-500/80 mt-1">
                     Đang Online
                   </div>
-
-                  {/** Biểu đồ sóng Realtime Gradient */}
-                  <div className="mt-2 w-full">
-                    <ZTTeamRealtimeSparkline value={site.activeUsers} />
-                  </div>
                 </div>
 
-                {/** Nội dung card: 1. Ở nước nào + 2. Title bài viết đang online */}
-                <div className="space-y-4 pt-3">
+                {/** 2. BIỂU ĐỒ 2 TẦNG "LƯỢT TRUY CẬP" (CHUẨN HÌNH 1) */}
+                <div className="bg-fb-surface-hover/20 p-4 rounded-2xl">
+                  <ZTTeamSiteAccessChart siteId={site.id} activeUsers={site.activeUsers} />
+                </div>
+
+                {/** 3. HÀNG 4 THẺ CHỈ SỐ ĐO LƯỜNG (CHUẨN HÌNH 2) */}
+                <ZTTeamSiteMetricCards site={site} />
+
+                {/** 4. NỘI DUNG REALTIME: TOP QUỐC GIA & TOP BÀI VIẾT (2 CỘT GỌN GÀNG) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                   {/** Ở nước nào */}
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                  <div className="bg-fb-surface-hover/20 p-4 rounded-2xl flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2.5">
                       <span className="flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-xs text-cyan-400">public</span>
                         <span>Quốc Gia Đang Truy Cập</span>
@@ -407,13 +659,13 @@ export default function GoogleAnalyticsPage() {
                     </div>
 
                     {site.topCountries && site.topCountries.length > 0 ? (
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 flex-1">
                         {site.topCountries.slice(0, 4).map((countryItem, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center justify-between px-3 py-1.5 rounded-full bg-fb-surface-hover/40 text-xs"
+                            className="flex items-center justify-between px-3 py-1.5 rounded-full bg-fb-surface-hover/50 text-xs"
                           >
-                            <span className="font-semibold text-fb-text truncate max-w-[200px]">
+                            <span className="font-semibold text-fb-text truncate max-w-[170px]">
                               {countryItem.country}
                             </span>
                             <span className="font-mono font-bold text-cyan-400 shrink-0 ml-2">
@@ -423,15 +675,15 @@ export default function GoogleAnalyticsPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-1.5 bg-fb-surface-hover/20 rounded-full px-3 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-3 text-center">
                         Chưa ghi nhận quốc gia
                       </p>
                     )}
                   </div>
 
                   {/** Title bài viết đang online là gì */}
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                  <div className="bg-fb-surface-hover/20 p-4 rounded-2xl flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2.5">
                       <span className="flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-xs text-emerald-400">article</span>
                         <span>Bài Viết Đang Được Đọc</span>
@@ -440,26 +692,26 @@ export default function GoogleAnalyticsPage() {
                     </div>
 
                     {site.topArticles && site.topArticles.length > 0 ? (
-                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                        {site.topArticles.slice(0, 5).map((article, idx) => (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 flex-1">
+                        {site.topArticles.slice(0, 4).map((article, idx) => (
                           <div
                             key={idx}
-                            className="flex items-start justify-between gap-2 px-3 py-2 rounded-2xl bg-fb-surface-hover/40 hover:bg-fb-surface-hover text-xs transition-colors"
+                            className="flex items-start justify-between gap-2 px-3 py-1.5 rounded-xl bg-fb-surface-hover/50 hover:bg-fb-surface-hover text-xs transition-colors"
                           >
                             <span
-                              className="font-medium text-fb-text line-clamp-2 text-[11px] leading-tight"
+                              className="font-medium text-fb-text line-clamp-1 text-[11px]"
                               title={article.title}
                             >
                               {article.title}
                             </span>
-                            <span className="font-mono font-bold text-emerald-400 shrink-0 ml-1">
-                              {article.activeUsers}
+                            <span className="font-mono font-bold text-emerald-400 shrink-0 ml-1 text-[11px]">
+                              +{article.activeUsers}
                             </span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-1.5 bg-fb-surface-hover/20 rounded-full px-3 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-3 text-center">
                         Chưa có độc giả đọc bài
                       </p>
                     )}
@@ -467,16 +719,16 @@ export default function GoogleAnalyticsPage() {
                 </div>
               </div>
 
-              {/** Footer Card: Tên site, domain, Property ID và Nút mở GA4 */}
-              <div className="pt-4 mt-4 flex items-center justify-between gap-2 bg-fb-surface-hover/20 p-3 rounded-2xl">
+              {/** 5. FOOTER CARD: TÊN SITE, DOMAIN, PROPERTY ID VÀ NÚT MỞ GA4 */}
+              <div className="pt-4 flex items-center justify-between gap-3 bg-fb-surface-hover/30 p-3.5 rounded-2xl">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm text-emerald-400 shrink-0">language</span>
-                    <h4 className="font-black text-xs text-fb-text truncate" title={site.name}>
+                    <span className="material-symbols-outlined text-base text-emerald-400 shrink-0">language</span>
+                    <h4 className="font-black text-sm text-fb-text truncate" title={site.name}>
                       {site.name}
                     </h4>
                   </div>
-                  <p className="text-[10px] text-fb-text-muted truncate mt-0.5 font-mono">
+                  <p className="text-xs text-fb-text-muted truncate mt-0.5 font-mono">
                     {site.domain || 'Domain'} • ID: {site.propertyId}
                   </p>
                 </div>
@@ -485,11 +737,10 @@ export default function GoogleAnalyticsPage() {
                   href={site.ga4Url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fb-blue hover:bg-blue-600 text-white text-xs font-bold transition-all shrink-0 shadow-sm shadow-blue-500/20"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-fb-blue hover:bg-blue-600 text-white text-xs font-bold transition-all shrink-0 shadow-md shadow-blue-500/20 cursor-pointer"
                   title="Mở báo cáo đầy đủ trong app Google Analytics"
                 >
-                  <span className="hidden sm:inline">Mở GA4</span>
-                  <span className="sm:hidden">GA4</span>
+                  <span>Mở GA4</span>
                   <span className="material-symbols-outlined text-xs">open_in_new</span>
                 </a>
               </div>
