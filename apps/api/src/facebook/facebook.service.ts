@@ -972,6 +972,38 @@ export class ZTTeamFacebookService {
   }
 
   /**
+   * ZTTeam: Lấy danh sách bình luận (kèm reply lồng nhau) của 1 Post hoặc 1 Comment qua Graph API
+   */
+  async ztteam_getComments(pageId: string, objectId: string): Promise<any[]> {
+    const page = await this.prisma.ztteam_pages.findFirst({
+      where: { fb_page_id: pageId }
+    });
+
+    if (!page || !page.page_token_encrypted) {
+      throw new Error('Fanpage không tồn tại hoặc chưa cấu hình token');
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `https://graph.facebook.com/${this.API_VERSION}/${objectId}/comments`,
+          {
+            params: {
+              access_token: page.page_token_encrypted,
+              fields: 'id,from,message,created_time,comments{id,from,message,created_time}',
+              limit: 25
+            }
+          }
+        )
+      );
+      return response.data?.data || [];
+    } catch (error: any) {
+      this.logger.error(`Error fetching comments for ${objectId}: ${error.response?.data?.error?.message || error.message}`);
+      return [];
+    }
+  }
+
+  /**
    * ZTTeam: Xóa 1 Fanpage:
    * 1. Chỉ xóa các bài ĐÃ ĐĂNG (is_posted = true hoặc status = POSTED).
    * 2. Các bài CHƯA ĐĂNG (is_posted = false) được tự động chia đều (Round-Robin) cho các Fanpage còn lại của User.

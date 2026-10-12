@@ -520,7 +520,9 @@ export class ZTTeamPublisherCron {
    * Xử lý quy trình comment tự động 2 bước sau khi đăng bài:
    * Bước 1: Sau 60 phút từ posted_at -> Đăng bình luận mồi:
    * "...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇"
-   * Bước 2: Sau 15 phút từ hook_comment_at -> Reply trực tiếp vào hook_comment_id với Part 2 + link bài viết
+   * Bước 2: Tương tác thông minh (Smart Engagement):
+   * - Trong vòng 2 tiếng (120 phút): Quét mỗi 2 phút, nếu có bất kỳ độc giả thật nào comment -> Reply ngay Part 2 + link cho họ (gửi chuông thông báo).
+   * - Nếu sau 2 tiếng vẫn 0 có ai comment: Kích hoạt Fallback tự động reply vào comment mồi của Page để đảm bảo luôn có link bài viết.
    */
   async ztteam_handleDelayedComments() {
     try {
@@ -590,14 +592,14 @@ export class ZTTeamPublisherCron {
         }
       }
 
-      /** Bước 2: Quét các bài viết đã đăng comment mồi được 15 phút (comment_step = 1) */
-      const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+      /** Bước 2: Quét các bài viết đang ở comment_step = 1 (Đã đăng comment mồi, chờ độc giả tương tác hoặc fallback sau 2 tiếng) */
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
       const step1Images = await this.prisma.ztteam_images.findMany({
         where: {
           is_posted: true,
           comment_step: 1,
           hook_comment_id: { not: null },
-          hook_comment_at: { lte: fifteenMinutesAgo }
+          hook_comment_at: { gte: threeDaysAgo }
         },
         include: {
           page: {
@@ -608,10 +610,14 @@ export class ZTTeamPublisherCron {
       });
 
       for (const img of step1Images) {
-        if (!img.page?.fb_page_id || !img.hook_comment_id) continue;
+        if (!img.page?.fb_page_id || !img.hook_comment_id || !img.hook_comment_at) continue;
 
         try {
-          /** Nội dung reply Part 2 + link bài viết */
+          const hookAgeMs = now.getTime() - new Date(img.hook_comment_at).getTime();
+          const hookAgeMinutes = Math.floor(hookAgeMs / (60 * 1000));
+          const isExpired2Hours = hookAgeMinutes >= 120; /** Đủ 2 tiếng (120 phút) */
+
+          /** Chuẩn bị nội dung reply Part 2 + link bài viết */
           let replyContent = img.ai_first_comment;
           if (!replyContent || replyContent === 'NO_LINK') {
             const utmMedium = this.ztteam_slugify(img.page?.fb_account?.name || 'account');
@@ -622,24 +628,83 @@ export class ZTTeamPublisherCron {
             replyContent = `👉 FULL STORY HERE 👇👇👇\n${trackingLink}`;
           }
 
-          /** Đăng reply trực tiếp vào bình luận mồi (nested comment) */
-          await this.facebookService.ztteam_publishComment(
+          if (isExpired2Hours) {
+            /** KỊCH BẢN 1: Đã hết 2 tiếng mà không có ai comment -> Kích hoạt Fallback tự động reply vào chính comment mồi */
+            await this.facebookService.ztteam_publishComment(
+              img.page.fb_page_id,
+              img.hook_comment_id,
+              replyContent
+            );
+
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                comment_step: 2
+              }
+            });
+
+            this.logger.log(`[Auto-Comment Step 2 - Fallback 2h] Replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id} after ${hookAgeMinutes}m`);
+            continue;
+          }
+
+          /** KỊCH BẢN 2: Trong vòng 2 tiếng -> Quét mỗi 2 phút một lần để tìm tương tác từ độc giả thật */
+          if (hookAgeMinutes % 2 !== 0) {
+            /** Chưa đến chu kỳ 2 phút -> Bỏ qua tick này để tiết kiệm API */
+            continue;
+          }
+
+          /** Gọi Graph API lấy bình luận bài viết (Field expansion kèm reply lồng nhau) */
+          const comments = await this.facebookService.ztteam_getComments(
             img.page.fb_page_id,
-            img.hook_comment_id,
-            replyContent
+            img.fb_post_id || img.hook_comment_id
           );
 
-          await this.prisma.ztteam_images.update({
-            where: { id: img.id },
-            data: {
-              comment_step: 2
-            }
-          });
+          /** Tìm bình luận từ độc giả thật (không phải do chính Fanpage tự comment) */
+          let targetCommentId: string | null = null;
+          let realCommenterName = '';
 
-          this.logger.log(`[Auto-Comment Step 2] Successfully replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id}`);
+          for (const comment of comments) {
+            /** Kiểm tra xem comment cấp 1 có phải của độc giả thật không */
+            if (comment.from?.id && comment.from.id !== img.page.fb_page_id && comment.id !== img.hook_comment_id) {
+              targetCommentId = comment.id;
+              realCommenterName = comment.from?.name || '';
+              break;
+            }
+
+            /** Kiểm tra các sub-comments (replies) lồng bên trong comment */
+            if (comment.comments?.data && Array.isArray(comment.comments.data)) {
+              for (const subComment of comment.comments.data) {
+                if (subComment.from?.id && subComment.from.id !== img.page.fb_page_id) {
+                  targetCommentId = subComment.id;
+                  realCommenterName = subComment.from?.name || '';
+                  break;
+                }
+              }
+            }
+
+            if (targetCommentId) break;
+          }
+
+          /** Nếu tìm thấy độc giả thật bình luận -> Reply ngay cho độc giả đó! */
+          if (targetCommentId) {
+            await this.facebookService.ztteam_publishComment(
+              img.page.fb_page_id,
+              targetCommentId,
+              replyContent
+            );
+
+            await this.prisma.ztteam_images.update({
+              where: { id: img.id },
+              data: {
+                comment_step: 2
+              }
+            });
+
+            this.logger.log(`[Auto-Comment Step 2 - Smart Engagement] Found real user (${realCommenterName}) on image ${img.id}! Replied Part 2 to comment ${targetCommentId}`);
+          }
         } catch (err: any) {
           this.logger.error(`[Auto-Comment Step 2] Failed for image ${img.id}: ${err.message}`);
-          /** Fail-safe: Cap nhat comment_step = 2 de ket thuc quy trinh, khong bi loop */
+          /** Fail-safe: Cập nhật comment_step = 2 để kết thúc quy trình, không bị loop */
           await this.prisma.ztteam_images.update({
             where: { id: img.id },
             data: {
