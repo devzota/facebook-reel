@@ -295,24 +295,38 @@ export default function ZTTeamAIPostCard({
             )}
 
             {item.video_url ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowVideo(!showVideo);
-                }}
-                className={`pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
-                  showVideo
-                    ? 'bg-amber-400 text-black shadow-amber-400/20'
-                    : 'bg-black/70 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:bg-black/90'
-                }`}
-                title="Bấm để chuyển đổi giữa Ảnh và Video Reel"
-              >
-                <span className="material-symbols-outlined text-xs">
-                  {showVideo ? 'photo' : 'movie'}
-                </span>
-                <span>{showVideo ? 'XEM ẢNH' : 'REEL 15S'}</span>
-              </button>
+              <div className="flex items-center gap-1.5 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowVideo(!showVideo);
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all shadow-md cursor-pointer ${
+                    showVideo
+                      ? 'bg-amber-400 text-black shadow-amber-400/20'
+                      : 'bg-black/70 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:bg-black/90'
+                  }`}
+                  title="Bấm để chuyển đổi giữa Ảnh và Video Reel"
+                >
+                  <span className="material-symbols-outlined text-xs">
+                    {showVideo ? 'photo' : 'movie'}
+                  </span>
+                  <span>{showVideo ? 'XEM ẢNH' : 'REEL 15S'}</span>
+                </button>
+
+                <a
+                  href={item.video_url}
+                  download={`reel_${item.wp_post_id || item.id}.mp4`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-center w-6 h-6 rounded-full bg-black/70 hover:bg-black/90 backdrop-blur-md border border-amber-400/40 text-amber-300 hover:text-white transition-all shadow-md cursor-pointer"
+                  title="Tải Video Reel (MP4) về máy"
+                >
+                  <span className="material-symbols-outlined text-xs">download</span>
+                </a>
+              </div>
             ) : item.video_status === 'PENDING' ? (
               <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 backdrop-blur-md animate-pulse shadow-md">
                 <span className="material-symbols-outlined text-xs animate-spin">sync</span>
@@ -590,17 +604,13 @@ export default function ZTTeamAIPostCard({
             </button>
           )}
 
-          {/** Nút Đã Đăng Thủ Công: Cho phép người dùng đánh dấu bài viết đã đăng */}
-          {!isAlreadyPosted && (
+          {/** Nút Đã Đăng Thủ Công: CHỈ HIỂN THỊ KHI LÀ BÀI VIẾT THỦ CÔNG (KHÔNG GẮN VỚI FANPAGE) */}
+          {isStandaloneManual && !isAlreadyPosted && (
             <button
               type="button"
               onClick={ztteam_handleMarkPosted}
               disabled={isMarkingPosted}
-              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
-                isStandaloneManual
-                  ? 'flex-1 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                  : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
-              }`}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
               title="Đánh dấu đã đăng bài viết thủ công lên Facebook"
             >
               {isMarkingPosted ? (
@@ -641,15 +651,31 @@ export default function ZTTeamAIPostCard({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {/** Tải Ảnh 2K */}
           {item.image_url && (
             <a
               href={item.image_url}
+              download={`image_${item.wp_post_id || item.id}.png`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text-muted hover:text-white transition-all flex items-center justify-center border border-white/5"
-              title="Tải ảnh về máy"
+              className="w-8 h-8 rounded-lg bg-fb-surface-hover hover:bg-fb-surface-hover/80 text-fb-text-muted hover:text-white transition-all flex items-center justify-center border border-white/5 cursor-pointer shadow-sm"
+              title="Tải ảnh 2K về máy"
             >
               <span className="material-symbols-outlined text-[16px]">download</span>
+            </a>
+          )}
+
+          {/** Tải Video Reel (MP4) */}
+          {item.video_url && (
+            <a
+              href={item.video_url}
+              download={`reel_${item.wp_post_id || item.id}.mp4`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-8 h-8 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white transition-all flex items-center justify-center border border-amber-500/30 cursor-pointer shadow-sm"
+              title="Tải Video Reel (MP4) về máy"
+            >
+              <span className="material-symbols-outlined text-[16px]">movie</span>
             </a>
           )}
 
