@@ -592,7 +592,7 @@ export class ZTTeamPublisherCron {
         }
       }
 
-      /** Bước 2: Quét các bài viết đang ở comment_step = 1 (Đã đăng comment mồi, chờ độc giả tương tác hoặc fallback sau 2 tiếng) */
+      /** Bước 2: Quét các bài viết đang ở comment_step = 1 (Đã đăng comment mồi, chờ độc giả tương tác hoặc fallback sau 5 tiếng) */
       const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
       const step1Images = await this.prisma.ztteam_images.findMany({
         where: {
@@ -615,7 +615,7 @@ export class ZTTeamPublisherCron {
         try {
           const hookAgeMs = now.getTime() - new Date(img.hook_comment_at).getTime();
           const hookAgeMinutes = Math.floor(hookAgeMs / (60 * 1000));
-          const isExpired2Hours = hookAgeMinutes >= 120; /** Đủ 2 tiếng (120 phút) */
+          const isExpired5Hours = hookAgeMinutes >= 300; /** Đủ 5 tiếng (300 phút) */
 
           /** Chuẩn bị nội dung reply Part 2 + link bài viết */
           let replyContent = img.ai_first_comment;
@@ -628,8 +628,8 @@ export class ZTTeamPublisherCron {
             replyContent = `👉 FULL STORY HERE 👇👇👇\n${trackingLink}`;
           }
 
-          if (isExpired2Hours) {
-            /** KỊCH BẢN 1: Đã hết 2 tiếng mà không có ai comment -> Kích hoạt Fallback tự động reply vào chính comment mồi */
+          if (isExpired5Hours) {
+            /** KỊCH BẢN 1: Đã hết 5 tiếng mà không có ai comment -> Kích hoạt Fallback tự động reply vào chính comment mồi */
             await this.facebookService.ztteam_publishComment(
               img.page.fb_page_id,
               img.hook_comment_id,
@@ -643,11 +643,11 @@ export class ZTTeamPublisherCron {
               }
             });
 
-            this.logger.log(`[Auto-Comment Step 2 - Fallback 2h] Replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id} after ${hookAgeMinutes}m`);
+            this.logger.log(`[Auto-Comment Step 2 - Fallback 5h] Replied Part 2 & Link for image ${img.id} to hook comment ${img.hook_comment_id} after ${hookAgeMinutes}m`);
             continue;
           }
 
-          /** KỊCH BẢN 2: Trong vòng 2 tiếng -> Quét mỗi 2 phút một lần để tìm tương tác từ độc giả thật */
+          /** KỊCH BẢN 2: Trong vòng 5 tiếng -> Quét mỗi 2 phút một lần để tìm tương tác từ độc giả thật */
           if (hookAgeMinutes % 2 !== 0) {
             /** Chưa đến chu kỳ 2 phút -> Bỏ qua tick này để tiết kiệm API */
             continue;

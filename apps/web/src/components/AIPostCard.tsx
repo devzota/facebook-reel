@@ -529,7 +529,7 @@ export default function ZTTeamAIPostCard({
           </p>
         </div>
 
-        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (Sau 2h) */}
+        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (Sau 5h) */}
         <div className="ml-3 pl-2.5 border-l-2 border-blue-500/30 space-y-1.5">
           <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
             <div className="flex items-center gap-1 text-cyan-400">
@@ -555,7 +555,7 @@ export default function ZTTeamAIPostCard({
               ) : item.comment_step === 1 ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                  Chờ 2h
+                  Chờ 5h
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
@@ -566,7 +566,7 @@ export default function ZTTeamAIPostCard({
             ) : (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
                 <span className="material-symbols-outlined text-[12px]">schedule</span>
-                Tự động sau 2h
+                Tự động sau 5h
               </span>
             )}
           </div>
