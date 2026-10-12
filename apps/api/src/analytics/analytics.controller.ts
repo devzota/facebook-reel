@@ -17,14 +17,22 @@ export class ZTTeamAnalyticsController {
   }
 
   /**
-   * ZTTeam: Lưu cấu hình Service Account JSON & Default Property ID
+   * ZTTeam: Lưu cấu hình Service Account JSON, Default Property ID & Monitored Sites
    * POST /api/analytics/config
    */
   @Post('config')
   async ztteam_saveConfig(
-    @Body() body: { credentialsJson: string; defaultPropertyId?: string }
+    @Body() body: {
+      credentialsJson?: string;
+      defaultPropertyId?: string;
+      monitoredSites?: Array<{ id: string; name: string; domain: string; propertyId: string; active: boolean }>;
+    }
   ) {
-    return this.analyticsService.ztteam_saveConfig(body.credentialsJson, body.defaultPropertyId);
+    return this.analyticsService.ztteam_saveConfig(
+      body.credentialsJson,
+      body.defaultPropertyId,
+      body.monitoredSites
+    );
   }
 
   /**
@@ -37,7 +45,7 @@ export class ZTTeamAnalyticsController {
   }
 
   /**
-   * ZTTeam: Lấy dữ liệu người dùng online theo thời gian thực (Realtime)
+   * ZTTeam: Lấy dữ liệu người dùng online theo thời gian thực đơn lẻ
    * GET /api/analytics/realtime?siteId=xxx&propertyId=xxx
    */
   @Get('realtime')
@@ -46,5 +54,14 @@ export class ZTTeamAnalyticsController {
     @Query('propertyId') propertyId?: string
   ) {
     return this.analyticsService.ztteam_getRealtimeStats(siteId, propertyId);
+  }
+
+  /**
+   * ZTTeam: Lấy dữ liệu Realtime đa site (Multi-site) đồng thời
+   * GET /api/analytics/realtime-all
+   */
+  @Get('realtime-all')
+  async ztteam_getAllRealtime() {
+    return this.analyticsService.ztteam_getAllRealtimeStats();
   }
 }

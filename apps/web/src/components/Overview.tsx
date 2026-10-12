@@ -99,6 +99,7 @@ export default function Overview() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [daysRange, setDaysRange] = useState(7);
+  const [gaRealtime, setGaRealtime] = useState<any>(null);
 
   const ztteam_formatDate = (dateStr: string | Date) => {
     if (!dateStr) return '';
@@ -116,13 +117,15 @@ export default function Overview() {
     const ztteam_fetchDashboardData = async () => {
       try {
         setIsLoading(true);
-        const [statsRes, chartRes] = await Promise.all([
+        const [statsRes, chartRes, gaRes] = await Promise.allSettled([
           api.get('dashboard/stats'),
-          api.get(`dashboard/chart?days=${daysRange}`)
+          api.get(`dashboard/chart?days=${daysRange}`),
+          api.get('analytics/realtime-all')
         ]);
 
-        if (statsRes.data) setStats(statsRes.data);
-        if (chartRes.data) setChartDataState(chartRes.data);
+        if (statsRes.status === 'fulfilled' && statsRes.value?.data) setStats(statsRes.value.data);
+        if (chartRes.status === 'fulfilled' && chartRes.value?.data) setChartDataState(chartRes.value.data);
+        if (gaRes.status === 'fulfilled' && gaRes.value?.data) setGaRealtime(gaRes.value.data);
       } catch (e) {
         console.error('Lỗi tải dữ liệu Dashboard:', e);
       } finally {
@@ -187,6 +190,74 @@ export default function Overview() {
           </div>
         </div>
       </div>
+
+      {/** GA4 Realtime Multi-site Cards Section */}
+      {gaRealtime?.configured && Array.isArray(gaRealtime?.sites) && gaRealtime.sites.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg text-emerald-400">insights</span>
+              <h3 className="text-sm sm:text-base font-black text-fb-text">Độc Giả Trực Tuyến (Google Analytics 4)</h3>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                {gaRealtime.totalActiveUsers} online
+              </span>
+            </div>
+            <button
+              onClick={() => navigate('/google-analytics')}
+              className="text-xs font-bold text-fb-blue hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>Xem chi tiết GA4</span>
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gaRealtime.sites.map((site: any) => (
+              <div
+                key={site.id}
+                onClick={() => navigate('/google-analytics')}
+                className="bg-fb-surface rounded-2xl p-4 border border-fb-surface-hover/50 hover:border-slate-600 shadow-md cursor-pointer transition-all flex flex-col justify-between group"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-fb-surface-hover/30 pb-2.5">
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-black text-fb-text truncate group-hover:text-blue-400 transition-colors">{site.name}</h4>
+                    <p className="text-[10px] text-fb-text-muted font-mono truncate">{site.domain}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-emerald-400 font-mono font-black text-lg shrink-0">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>{site.activeUsers}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-1.5 text-xs">
+                  {site.topArticles?.[0] ? (
+                    <div className="flex items-start gap-1.5 text-[11px] text-slate-300">
+                      <span className="material-symbols-outlined text-xs text-slate-500 shrink-0 mt-0.5">article</span>
+                      <span className="line-clamp-1 flex-1 font-medium">{site.topArticles[0].title}</span>
+                      <span className="font-mono text-emerald-400 font-bold shrink-0">+{site.topArticles[0].activeUsers}</span>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-slate-500 italic">Chưa có độc giả đọc bài</div>
+                  )}
+
+                  {site.topCountries?.[0] && (
+                    <div className="flex items-center justify-between text-[10px] text-fb-text-muted">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs text-cyan-400">public</span>
+                        <span>{site.topCountries[0].country}</span>
+                      </span>
+                      <span className="font-mono text-cyan-400 font-bold">{site.topCountries[0].activeUsers} online</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/** 4 Stat Cards Thống Kê Động 100% (Chia 2 cột trên mobile, 4 cột trên desktop) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

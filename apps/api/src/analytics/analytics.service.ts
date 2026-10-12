@@ -50,7 +50,7 @@ export class ZTTeamAnalyticsService {
   }
 
   /**
-   * ZTTeam: Lấy thông tin cấu hình hiện tại (Ẩn private_key để bảo mật)
+   * ZTTeam: Lấy thông tin cấu hình hiện tại (Bao gồm cả credentialsJson để hiển thị bền vững trong UI)
    */
   async ztteam_getConfig() {
     const setting = await this.prisma.ztteam_system_settings.findUnique({
@@ -61,13 +61,18 @@ export class ZTTeamAnalyticsService {
       where: { key: 'ga4_default_property_id' },
     });
 
+    const monitoredSitesSetting = await this.prisma.ztteam_system_settings.findUnique({
+      where: { key: 'ga4_monitored_sites' },
+    });
+
     let clientEmail = '';
     let projectId = '';
     let hasCredentials = false;
+    let credentialsJson = setting?.value || '';
 
-    if (setting?.value) {
+    if (credentialsJson) {
       try {
-        const creds = JSON.parse(setting.value);
+        const creds = JSON.parse(credentialsJson);
         clientEmail = creds.client_email || '';
         projectId = creds.project_id || '';
         hasCredentials = true;
@@ -75,8 +80,9 @@ export class ZTTeamAnalyticsService {
         /** Bỏ qua */
       }
     } else if (process.env.GA4_CREDENTIALS_JSON) {
+      credentialsJson = process.env.GA4_CREDENTIALS_JSON;
       try {
-        const creds = JSON.parse(process.env.GA4_CREDENTIALS_JSON);
+        const creds = JSON.parse(credentialsJson);
         clientEmail = creds.client_email || '';
         projectId = creds.project_id || '';
         hasCredentials = true;
@@ -85,39 +91,71 @@ export class ZTTeamAnalyticsService {
       }
     }
 
+    let monitoredSites: Array<{ id: string; name: string; domain: string; propertyId: string; active: boolean }> = [];
+    if (monitoredSitesSetting?.value) {
+      try {
+        monitoredSites = JSON.parse(monitoredSitesSetting.value);
+      } catch (e) {
+        monitoredSites = [];
+      }
+    }
+
+    const defaultPropertyId = defaultPropertySetting?.value || process.env.GA4_DEFAULT_PROPERTY_ID || (monitoredSites[0]?.propertyId || '');
+
+    /** Khởi tạo mặc định nếu chưa có cấu hình danh sách site */
+    if (monitoredSites.length === 0 && defaultPropertyId) {
+      monitoredSites = [
+        {
+          id: 'site_1',
+          name: 'thieponline.store',
+          domain: 'thieponline.store',
+          propertyId: defaultPropertyId,
+          active: true,
+        },
+      ];
+    }
+
     return {
       hasCredentials,
+      credentialsJson,
       clientEmail,
       projectId,
-      defaultPropertyId: defaultPropertySetting?.value || process.env.GA4_DEFAULT_PROPERTY_ID || '',
+      defaultPropertyId,
+      monitoredSites,
     };
   }
 
   /**
-   * ZTTeam: Lưu cấu hình Service Account JSON và Default Property ID vào cơ sở dữ liệu
+   * ZTTeam: Lưu cấu hình Service Account JSON, Default Property ID và danh sách Monitored Sites
    */
-  async ztteam_saveConfig(credentialsJson: string, defaultPropertyId?: string) {
-    if (!credentialsJson || !credentialsJson.trim()) {
-      throw new BadRequestException('Nội dung file JSON Service Account không được để trống.');
-    }
-
-    try {
-      const parsed = JSON.parse(credentialsJson.trim());
-      if (!parsed.client_email || !parsed.private_key) {
-        throw new BadRequestException('File JSON không hợp lệ. Phải chứa client_email và private_key của Google Cloud.');
+  async ztteam_saveConfig(
+    credentialsJson?: string,
+    defaultPropertyId?: string,
+    monitoredSites?: Array<{ id: string; name: string; domain: string; propertyId: string; active: boolean }>
+  ) {
+    if (credentialsJson && credentialsJson.trim()) {
+      try {
+        const parsed = JSON.parse(credentialsJson.trim());
+        if (!parsed.client_email || !parsed.private_key) {
+          throw new BadRequestException('File JSON không hợp lệ. Phải chứa client_email và private_key của Google Cloud.');
+        }
+      } catch (err: any) {
+        throw new BadRequestException(`Định dạng JSON không hợp lệ: ${err.message}`);
       }
-    } catch (err: any) {
-      throw new BadRequestException(`Định dạng JSON không hợp lệ: ${err.message}`);
+
+      /** Lưu vào cơ sở dữ liệu */
+      await this.prisma.ztteam_system_settings.upsert({
+        where: { key: 'ga4_service_account_json' },
+        create: { key: 'ga4_service_account_json', value: credentialsJson.trim() },
+        update: { value: credentialsJson.trim() },
+      });
+
+      /** Xóa cache client để khởi tạo lại với thông tin mới */
+      this.analyticsClient = null;
+      this.clientInitialized = false;
     }
 
-    /** Lưu vào cơ sở dữ liệu */
-    await this.prisma.ztteam_system_settings.upsert({
-      where: { key: 'ga4_service_account_json' },
-      create: { key: 'ga4_service_account_json', value: credentialsJson.trim() },
-      update: { value: credentialsJson.trim() },
-    });
-
-    if (defaultPropertyId) {
+    if (defaultPropertyId !== undefined) {
       await this.prisma.ztteam_system_settings.upsert({
         where: { key: 'ga4_default_property_id' },
         create: { key: 'ga4_default_property_id', value: defaultPropertyId.trim() },
@@ -125,9 +163,13 @@ export class ZTTeamAnalyticsService {
       });
     }
 
-    /** Xóa cache client để khởi tạo lại với thông tin mới */
-    this.analyticsClient = null;
-    this.clientInitialized = false;
+    if (monitoredSites !== undefined && Array.isArray(monitoredSites)) {
+      await this.prisma.ztteam_system_settings.upsert({
+        where: { key: 'ga4_monitored_sites' },
+        create: { key: 'ga4_monitored_sites', value: JSON.stringify(monitoredSites) },
+        update: { value: JSON.stringify(monitoredSites) },
+      });
+    }
 
     return {
       success: true,
@@ -344,6 +386,130 @@ export class ZTTeamAnalyticsService {
       topDevices,
       topCampaigns: topCities.map(c => ({ campaign: c.city, source: 'Thành phố', activeUsers: c.activeUsers })),
       minuteTrend,
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * ZTTeam: Lấy dữ liệu Realtime đồng thời cho tất cả các website được giám sát (Multi-site)
+   */
+  async ztteam_getAllRealtimeStats() {
+    const config = await this.ztteam_getConfig();
+    const client = await this.ztteam_getClient();
+
+    if (!client || !config.hasCredentials) {
+      return {
+        configured: false,
+        totalActiveUsers: 0,
+        sites: [],
+        message: 'Chưa cấu hình Google Analytics Service Account JSON.',
+      };
+    }
+
+    const sitesToQuery = (config.monitoredSites || []).filter(s => s.active && s.propertyId?.trim());
+
+    if (sitesToQuery.length === 0) {
+      return {
+        configured: true,
+        totalActiveUsers: 0,
+        sites: [],
+        message: 'Chưa có website nào được bật theo dõi hoặc thiếu Property ID.',
+      };
+    }
+
+    /** Truy vấn song song cho tất cả các site */
+    const results = await Promise.allSettled(
+      sitesToQuery.map(async (site) => {
+        const propId = site.propertyId.trim();
+        let activeUsers = 0;
+        let topArticles: Array<{ title: string; activeUsers: number }> = [];
+        let topCountries: Array<{ country: string; activeUsers: number }> = [];
+
+        try {
+          /** 1. Lấy tổng số user online */
+          const [overviewRes] = await client.runRealtimeReport({
+            property: `properties/${propId}`,
+            metrics: [{ name: 'activeUsers' }],
+          });
+          activeUsers = parseInt(overviewRes.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
+        } catch (err: any) {
+          this.logger.warn(`Lỗi lấy activeUsers cho ${site.domain} (#${propId}): ${err.message}`);
+        }
+
+        try {
+          /** 2. Lấy top bài viết đang đọc (unifiedScreenName) */
+          const [pagesRes] = await client.runRealtimeReport({
+            property: `properties/${propId}`,
+            dimensions: [{ name: 'unifiedScreenName' }],
+            metrics: [{ name: 'activeUsers' }],
+            orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+            limit: 6,
+          });
+
+          topArticles = (pagesRes.rows || []).map(r => ({
+            title: r.dimensionValues?.[0]?.value || 'Trang chủ',
+            activeUsers: parseInt(r.metricValues?.[0]?.value || '0', 10),
+          }));
+        } catch (err: any) {
+          this.logger.warn(`Lỗi lấy topArticles cho ${site.domain} (#${propId}): ${err.message}`);
+        }
+
+        try {
+          /** 3. Lấy top quốc gia */
+          const [countriesRes] = await client.runRealtimeReport({
+            property: `properties/${propId}`,
+            dimensions: [{ name: 'country' }],
+            metrics: [{ name: 'activeUsers' }],
+            orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+            limit: 5,
+          });
+
+          topCountries = (countriesRes.rows || []).map(r => ({
+            country: r.dimensionValues?.[0]?.value || 'Không xác định',
+            activeUsers: parseInt(r.metricValues?.[0]?.value || '0', 10),
+          }));
+        } catch (err: any) {
+          this.logger.warn(`Lỗi lấy topCountries cho ${site.domain} (#${propId}): ${err.message}`);
+        }
+
+        return {
+          id: site.id,
+          name: site.name,
+          domain: site.domain,
+          propertyId: propId,
+          activeUsers,
+          topArticles,
+          topCountries,
+          ga4Url: `https://analytics.google.com/analytics/web/#/p${propId}/realtime/overview`,
+        };
+      })
+    );
+
+    const siteStats = results.map((res, idx) => {
+      if (res.status === 'fulfilled') {
+        return res.value;
+      } else {
+        const site = sitesToQuery[idx];
+        return {
+          id: site.id,
+          name: site.name,
+          domain: site.domain,
+          propertyId: site.propertyId,
+          activeUsers: 0,
+          topArticles: [],
+          topCountries: [],
+          ga4Url: `https://analytics.google.com/analytics/web/#/p${site.propertyId}/realtime/overview`,
+          error: res.reason?.message || 'Lỗi truy vấn',
+        };
+      }
+    });
+
+    const totalActiveUsers = siteStats.reduce((sum, s) => sum + (s.activeUsers || 0), 0);
+
+    return {
+      configured: true,
+      totalActiveUsers,
+      sites: siteStats,
       updatedAt: new Date(),
     };
   }

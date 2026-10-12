@@ -72,7 +72,8 @@ export default function Layout() {
         { to: '/crawl-sources', icon: 'language', label: 'Website' },
         { to: '/ai-factory', icon: 'auto_awesome', label: 'AI Factory' },
         { to: '/story-test', icon: 'auto_stories', label: 'Story Studio (Test)' },
-        { to: '/statistics', icon: 'analytics', label: 'Thống Kê' },
+        { to: '/statistics', icon: 'bar_chart', label: 'Thống Kê' },
+        { to: '/google-analytics', icon: 'insights', label: 'Google Analytics' },
     ];
 
     if (user?.role === 'ADMIN') {

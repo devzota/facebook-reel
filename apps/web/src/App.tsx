@@ -8,6 +8,7 @@ import ReelFactory from './pages/ReelFactory'
 import ImageFactory from './pages/ImageFactory'
 import AIFactory from './pages/AIFactory'
 import StatisticsPage from './pages/StatisticsPage'
+import GoogleAnalyticsPage from './pages/GoogleAnalyticsPage'
 import SystemSettingsPage from './pages/SystemSettingsPage'
 import Login from './pages/Login'
 import FanpageReport from './pages/FanpageReport'
@@ -50,6 +51,7 @@ function App() {
           <Route path="image-factory" element={<AIFactory />} />
           <Route path="story-test" element={<StoryTestStudio />} />
           <Route path="statistics" element={<StatisticsPage />} />
+          <Route path="google-analytics" element={<GoogleAnalyticsPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
           <Route path="users" element={<UserManagement />} />
         </Route>
