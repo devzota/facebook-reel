@@ -375,6 +375,7 @@ export class ZTTeamCrawlerService {
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',
+            video_status: imgRecord.video_url ? 'COMPLETED' : 'PENDING',
             created_at: new Date(),
             updated_at: new Date(),
           },
@@ -392,6 +393,7 @@ export class ZTTeamCrawlerService {
             ai_first_comment: firstCommentText,
             comment_step: 0,
             status: 'COMPLETED',
+            video_status: 'PENDING',
             is_posted: false,
           },
         });

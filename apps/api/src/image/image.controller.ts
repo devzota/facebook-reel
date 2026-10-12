@@ -638,22 +638,27 @@ export class ZTTeamImageController {
    */
   @Get('pending-video')
   async ztteam_getPendingVideo(@Query('auto') auto?: string) {
-    /** 1. Ưu tiên bài viết được đánh dấu PENDING thuộc Fanpage có cài đặt Reel hoặc Mixed (chỉ lấy bài CHƯA đăng) */
+    /** 1. Ưu tiên bài viết được đánh dấu PENDING (Kho Đăng Thủ Công hoặc Fanpage Reel/Mixed, chỉ lấy bài CHƯA đăng) */
     let post = await this.prisma.ztteam_images.findFirst({
       where: {
         status: 'COMPLETED',
         is_posted: false,
         image_url: { not: null },
         video_status: 'PENDING',
-        page: {
-          post_format: { in: ['reel', 'mixed'] },
-        },
+        OR: [
+          { page_id: null },
+          {
+            page: {
+              post_format: { in: ['reel', 'mixed'] },
+            },
+          },
+        ],
       },
       include: { page: true },
       orderBy: { updated_at: 'asc' },
     });
 
-    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed chưa có video (Chỉ lấy bài CHƯA đăng, trạng thái NONE) */
+    /** 2. Nếu auto=true và không có bài PENDING: Tự động lấy các bài cũ của Fanpage Reel/Mixed hoặc Kho Thủ Công chưa có video (Chỉ lấy bài CHƯA đăng, trạng thái NONE) */
     if (!post && auto === 'true') {
       post = await this.prisma.ztteam_images.findFirst({
         where: {
@@ -662,9 +667,14 @@ export class ZTTeamImageController {
           image_url: { not: null },
           video_url: null,
           video_status: 'NONE',
-          page: {
-            post_format: { in: ['reel', 'mixed'] },
-          },
+          OR: [
+            { page_id: null },
+            {
+              page: {
+                post_format: { in: ['reel', 'mixed'] },
+              },
+            },
+          ],
         },
         include: { page: true },
         orderBy: { created_at: 'desc' },
