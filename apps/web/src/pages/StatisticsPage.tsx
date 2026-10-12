@@ -104,10 +104,10 @@ export default function StatisticsPage() {
     }
   };
 
-  /** Tự động polling dữ liệu GA4 khi đang mở tab GA4 */
+  /** Tải dữ liệu GA4 khi khởi tạo và polling đều đặn */
   useEffect(() => {
+    ztteam_fetchGAStats();
     if (activeTab === 'ga4') {
-      ztteam_fetchGAStats();
       const interval = setInterval(() => {
         ztteam_fetchGAStats();
       }, 25000);
@@ -228,7 +228,7 @@ export default function StatisticsPage() {
           2. Thời Gian Thực (Google Analytics 4)
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Live
+            {gaStats?.activeUsers !== undefined ? `${gaStats.activeUsers} Online` : 'Live'}
           </span>
         </button>
       </div>
@@ -241,10 +241,14 @@ export default function StatisticsPage() {
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h2 className="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Báo Cáo Thống Kê</h2>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 shadow-sm shrink-0">
+                <button
+                  onClick={() => setActiveTab('ga4')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-sm shrink-0 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                  title="Bấm để xem báo cáo Google Analytics 4 Realtime"
+                >
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Realtime
-                </span>
+                  <span>{gaStats?.activeUsers !== undefined ? `${gaStats.activeUsers} Độc Giả Online` : 'Realtime'}</span>
+                </button>
               </div>
               <p className="text-sm font-medium text-fb-text-muted mt-1">Hiệu suất cào bài, đăng video và tương tác Facebook Insights toàn hệ thống.</p>
             </div>
@@ -810,25 +814,25 @@ export default function StatisticsPage() {
               </div>
             </div>
 
-            {/** Card 3: Nguồn Fanpage & Chiến dịch */}
+            {/** Card 3: Khu vực / Thành phố */}
             <div className="bg-gradient-to-br from-fb-surface via-fb-surface to-cyan-950/30 rounded-2xl p-3.5 sm:p-5 shadow-lg flex flex-col justify-between group">
               <div className="flex justify-between items-start mb-2 sm:mb-3">
                 <div>
-                  <p className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-wider">Nguồn Traffic / Chiến Dịch</p>
+                  <p className="text-[10px] sm:text-xs font-black text-cyan-400 uppercase tracking-wider">Khu Vực / Thành Phố</p>
                   <div className="flex items-baseline gap-2 mt-0.5 sm:mt-1">
                     <h3 className="text-2xl sm:text-4xl font-black text-fb-text group-hover:text-cyan-300 transition-colors">
-                      {isLoadingGA && !gaStats ? '...' : (gaStats?.topCampaigns?.length || 0)}
+                      {isLoadingGA && !gaStats ? '...' : (gaStats?.topCities?.length || gaStats?.topCampaigns?.length || 0)}
                     </h3>
-                    <span className="text-xs font-bold text-cyan-400">nguồn</span>
+                    <span className="text-xs font-bold text-cyan-400">khu vực</span>
                   </div>
                 </div>
                 <div className="w-8 h-8 sm:w-11 sm:h-11 shrink-0 flex items-center justify-center bg-gradient-to-br from-cyan-400 to-blue-600 text-white rounded-xl shadow-lg shadow-cyan-500/30 group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined text-lg sm:text-2xl">campaign</span>
+                  <span className="material-symbols-outlined text-lg sm:text-2xl">location_city</span>
                 </div>
               </div>
               <div className="flex items-center justify-between text-[10px] sm:text-xs text-fb-text-muted pt-1">
-                <span className="truncate">Top: <b className="text-cyan-300 font-bold">{gaStats?.topCampaigns?.[0]?.campaign || 'Direct / Organic'}</b></span>
-                <span className="text-cyan-400 font-bold">UTM Source</span>
+                <span className="truncate">Top: <b className="text-cyan-300 font-bold">{gaStats?.topCities?.[0]?.city || gaStats?.topCampaigns?.[0]?.campaign || 'Đang cập nhật'}</b></span>
+                <span className="text-cyan-400 font-bold">Thành phố</span>
               </div>
             </div>
 
@@ -913,7 +917,7 @@ export default function StatisticsPage() {
               <div className="flex items-center justify-between pb-2">
                 <div>
                   <h3 className="text-base font-bold text-fb-text tracking-tight">Top Bài Viết Đang Được Đọc Nhiều Nhất</h3>
-                  <p className="text-xs text-fb-text-muted mt-0.5">Xếp theo số độc giả đang xem trang cùng thời điểm</p>
+                  <p className="text-xs text-fb-text-muted mt-0.5">Xếp theo số độc giả đang xem bài viết cùng thời điểm</p>
                 </div>
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-lg">auto_stories</span>
@@ -953,16 +957,18 @@ export default function StatisticsPage() {
                             <p className="text-xs sm:text-sm font-bold text-fb-text truncate leading-snug">
                               {item.title || item.pagePath}
                             </p>
-                            <p className="text-[11px] text-fb-text-muted font-mono truncate mt-0.5">
-                              {item.pagePath}
-                            </p>
+                            {item.pageViews ? (
+                              <p className="text-[11px] text-blue-400 font-medium truncate mt-0.5">
+                                {item.pageViews} lượt xem trong 30p
+                              </p>
+                            ) : null}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>{item.activeUsers}</span>
+                            <span>{item.activeUsers} đang đọc</span>
                           </span>
 
                           {gaStats.siteUrl && (
@@ -984,32 +990,32 @@ export default function StatisticsPage() {
               </div>
             </div>
 
-            {/** Cột 2: Top Nguồn Traffic & Top Quốc Gia */}
+            {/** Cột 2: Khu Vực Thành Phố & Top Quốc Gia */}
             <div className="space-y-5 flex flex-col">
-              {/** Nguồn Fanpage & Campaign */}
+              {/** Thành Phố Truy Cập */}
               <div className="bg-fb-surface p-5 rounded-2xl shadow-lg flex flex-col space-y-3.5">
                 <div className="flex items-center justify-between pb-2 border-b border-fb-surface-hover/60">
                   <div>
-                    <h3 className="text-base font-bold text-fb-text tracking-tight">Chiến Dịch &amp; Nguồn Kéo Traffic</h3>
-                    <p className="text-xs text-fb-text-muted mt-0.5">Theo dõi nguồn UTM &amp; Fanpage</p>
+                    <h3 className="text-base font-bold text-fb-text tracking-tight">Khu Vực &amp; Thành Phố</h3>
+                    <p className="text-xs text-fb-text-muted mt-0.5">Thành phố độc giả đang truy cập</p>
                   </div>
                   <div className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-lg">track_changes</span>
+                    <span className="material-symbols-outlined text-lg">location_city</span>
                   </div>
                 </div>
 
                 <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1">
-                  {!gaStats?.topCampaigns || gaStats.topCampaigns.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-fb-text-muted">Chưa có dữ liệu nguồn traffic</p>
+                  {(!gaStats?.topCities || gaStats.topCities.length === 0) && (!gaStats?.topCampaigns || gaStats.topCampaigns.length === 0) ? (
+                    <p className="py-6 text-center text-xs text-fb-text-muted">Chưa có dữ liệu thành phố</p>
                   ) : (
-                    gaStats.topCampaigns.map((camp: any, idx: number) => (
+                    (gaStats.topCities || gaStats.topCampaigns).map((c: any, idx: number) => (
                       <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-fb-surface-hover/50 text-xs">
                         <div className="min-w-0 pr-2">
-                          <p className="font-bold text-fb-text truncate">{camp.campaign || '(not set)'}</p>
-                          <p className="text-[10px] text-fb-text-muted truncate mt-0.5">{camp.source || 'direct'}</p>
+                          <p className="font-bold text-fb-text truncate">{c.city || c.campaign}</p>
+                          <p className="text-[10px] text-fb-text-muted truncate mt-0.5">Thành phố</p>
                         </div>
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-cyan-500/15 text-cyan-400 shrink-0">
-                          {camp.activeUsers} online
+                          {c.activeUsers} online
                         </span>
                       </div>
                     ))

@@ -220,32 +220,48 @@ export class ZTTeamAnalyticsService {
       };
     }
 
+    let activeUsers = 0;
+    let pageViews = 0;
+    let topPages: any[] = [];
+    let topCountries: any[] = [];
+    let topCities: any[] = [];
+    let topDevices: any[] = [];
+    let minuteTrend: any[] = [];
+
+    /** 1. Gọi Report tổng số người online & lượt xem */
     try {
-      /** 1. Gọi Report tổng số người online */
       const [overviewRes] = await client.runRealtimeReport({
         property: `properties/${targetPropertyId}`,
         metrics: [{ name: 'activeUsers' }, { name: 'screenPageViews' }],
       });
+      activeUsers = parseInt(overviewRes.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
+      pageViews = parseInt(overviewRes.rows?.[0]?.metricValues?.[1]?.value || '0', 10);
+    } catch (err: any) {
+      this.logger.warn(`Overview report failed for #${targetPropertyId}: ${err.message}`);
+    }
 
-      const activeUsers = parseInt(overviewRes.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
-      const pageViews = parseInt(overviewRes.rows?.[0]?.metricValues?.[1]?.value || '0', 10);
-
-      /** 2. Gọi Report Top Pages đang online */
+    /** 2. Gọi Report Top Bài Viết đang online (unifiedScreenName là dimension chuẩn) */
+    try {
       const [pagesRes] = await client.runRealtimeReport({
         property: `properties/${targetPropertyId}`,
-        dimensions: [{ name: 'unifiedScreenName' }, { name: 'pagePath' }],
-        metrics: [{ name: 'activeUsers' }],
+        dimensions: [{ name: 'unifiedScreenName' }],
+        metrics: [{ name: 'activeUsers' }, { name: 'screenPageViews' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
         limit: 15,
       });
 
-      const topPages = (pagesRes.rows || []).map(row => ({
+      topPages = (pagesRes.rows || []).map(row => ({
         title: row.dimensionValues?.[0]?.value || 'Trang chủ',
-        pagePath: row.dimensionValues?.[1]?.value || '/',
+        pagePath: '',
         activeUsers: parseInt(row.metricValues?.[0]?.value || '0', 10),
+        pageViews: parseInt(row.metricValues?.[1]?.value || '0', 10),
       }));
+    } catch (err: any) {
+      this.logger.warn(`Pages report failed for #${targetPropertyId}: ${err.message}`);
+    }
 
-      /** 3. Gọi Report Top Quốc Gia */
+    /** 3. Gọi Report Top Quốc Gia */
+    try {
       const [countriesRes] = await client.runRealtimeReport({
         property: `properties/${targetPropertyId}`,
         dimensions: [{ name: 'country' }],
@@ -254,27 +270,52 @@ export class ZTTeamAnalyticsService {
         limit: 8,
       });
 
-      const topCountries = (countriesRes.rows || []).map(row => ({
+      topCountries = (countriesRes.rows || []).map(row => ({
         country: row.dimensionValues?.[0]?.value || 'Unknown',
         activeUsers: parseInt(row.metricValues?.[0]?.value || '0', 10),
       }));
+    } catch (err: any) {
+      this.logger.warn(`Countries report failed for #${targetPropertyId}: ${err.message}`);
+    }
 
-      /** 4. Gọi Report Nguồn Campaign / Fanpage kéo traffic */
-      const [campaignsRes] = await client.runRealtimeReport({
+    /** 4. Gọi Report Top Thành Phố (Khu vực truy cập) */
+    try {
+      const [citiesRes] = await client.runRealtimeReport({
         property: `properties/${targetPropertyId}`,
-        dimensions: [{ name: 'sessionCampaignName' }, { name: 'sessionSource' }],
+        dimensions: [{ name: 'city' }],
         metrics: [{ name: 'activeUsers' }],
         orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
         limit: 10,
       });
 
-      const topCampaigns = (campaignsRes.rows || []).map(row => ({
-        campaign: row.dimensionValues?.[0]?.value || '(not set)',
-        source: row.dimensionValues?.[1]?.value || '(direct)',
+      topCities = (citiesRes.rows || []).map(row => ({
+        city: row.dimensionValues?.[0]?.value || 'Unknown',
         activeUsers: parseInt(row.metricValues?.[0]?.value || '0', 10),
       }));
+    } catch (err: any) {
+      this.logger.warn(`Cities report failed for #${targetPropertyId}: ${err.message}`);
+    }
 
-      /** 5. Gọi Report biểu đồ người dùng theo từng phút (minutesAgo) */
+    /** 5. Gọi Report Thiết Bị Truy Cập (Mobile / Desktop) */
+    try {
+      const [devicesRes] = await client.runRealtimeReport({
+        property: `properties/${targetPropertyId}`,
+        dimensions: [{ name: 'deviceCategory' }],
+        metrics: [{ name: 'activeUsers' }],
+        orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+        limit: 5,
+      });
+
+      topDevices = (devicesRes.rows || []).map(row => ({
+        device: row.dimensionValues?.[0]?.value || 'Desktop',
+        activeUsers: parseInt(row.metricValues?.[0]?.value || '0', 10),
+      }));
+    } catch (err: any) {
+      this.logger.warn(`Devices report failed for #${targetPropertyId}: ${err.message}`);
+    }
+
+    /** 6. Gọi Report biểu đồ người dùng theo từng phút (minutesAgo) */
+    try {
       const [minutesRes] = await client.runRealtimeReport({
         property: `properties/${targetPropertyId}`,
         dimensions: [{ name: 'minutesAgo' }],
@@ -283,34 +324,27 @@ export class ZTTeamAnalyticsService {
         limit: 30,
       });
 
-      const minuteTrend = (minutesRes.rows || []).map(row => ({
+      minuteTrend = (minutesRes.rows || []).map(row => ({
         minutesAgo: parseInt(row.dimensionValues?.[0]?.value || '0', 10),
         activeUsers: parseInt(row.metricValues?.[0]?.value || '0', 10),
       }));
-
-      return {
-        configured: true,
-        propertyId: targetPropertyId,
-        siteUrl,
-        activeUsers,
-        pageViews,
-        topPages,
-        topCountries,
-        topCampaigns,
-        minuteTrend,
-        updatedAt: new Date(),
-      };
-    } catch (error: any) {
-      this.logger.error(`Lỗi lấy dữ liệu Realtime GA4 #${targetPropertyId}: ${error.message}`);
-      return {
-        configured: true,
-        error: error.message,
-        activeUsers: 0,
-        topPages: [],
-        topCountries: [],
-        topCampaigns: [],
-        minuteTrend: [],
-      };
+    } catch (err: any) {
+      this.logger.warn(`Minutes report failed for #${targetPropertyId}: ${err.message}`);
     }
+
+    return {
+      configured: true,
+      propertyId: targetPropertyId,
+      siteUrl,
+      activeUsers,
+      pageViews,
+      topPages,
+      topCountries,
+      topCities,
+      topDevices,
+      topCampaigns: topCities.map(c => ({ campaign: c.city, source: 'Thành phố', activeUsers: c.activeUsers })),
+      minuteTrend,
+      updatedAt: new Date(),
+    };
   }
 }
