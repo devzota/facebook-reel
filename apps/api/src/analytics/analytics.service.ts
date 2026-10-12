@@ -7,6 +7,7 @@ export class ZTTeamAnalyticsService {
   private readonly logger = new Logger(ZTTeamAnalyticsService.name);
   private analyticsClient: BetaAnalyticsDataClient | null = null;
   private clientInitialized = false;
+  private ztteam_realtimeCache = new Map<string, { data: any; timestamp: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -209,6 +210,15 @@ export class ZTTeamAnalyticsService {
       };
     } catch (error: any) {
       this.logger.error(`Lỗi kiểm tra kết nối GA4 Property #${targetPropertyId}: ${error.message}`);
+      if (error.message?.includes('RESOURCE_EXHAUSTED')) {
+        return {
+          success: true,
+          propertyId: targetPropertyId,
+          activeUsers: 0,
+          quotaExhausted: true,
+          message: `Xác thực Google Cloud thành công! Property ID #${targetPropertyId} đã kết nối chuẩn xác. (Lưu ý: Google Analytics vừa tạm hết hạn mức Token theo giờ, Google sẽ tự động cấp lại Token trong ít phút).`,
+        };
+      }
       throw new BadRequestException(`Lỗi kết nối GA4: ${error.message}`);
     }
   }
@@ -392,8 +402,18 @@ export class ZTTeamAnalyticsService {
 
   /**
    * ZTTeam: Lấy dữ liệu Realtime đồng thời cho tất cả các website được giám sát (Multi-site)
+   * Tích hợp In-Memory Cache 35s để chống cạn kiệt Token Quota của Google Cloud
    */
   async ztteam_getAllRealtimeStats() {
+    const cacheKey = 'all_realtime_stats';
+    const now = Date.now();
+    const cached = this.ztteam_realtimeCache.get(cacheKey);
+
+    /** 1. Trả về cache nếu chưa quá 35 giây để bảo vệ hạn mức Token của Google Cloud */
+    if (cached && now - cached.timestamp < 35000) {
+      return cached.data;
+    }
+
     const config = await this.ztteam_getConfig();
     const client = await this.ztteam_getClient();
 
@@ -417,10 +437,15 @@ export class ZTTeamAnalyticsService {
       };
     }
 
+    let hasResourceExhausted = false;
+
     /** Truy vấn song song cho tất cả các site */
     const results = await Promise.allSettled(
       sitesToQuery.map(async (site) => {
         const propId = site.propertyId.trim();
+        const siteCacheKey = `site_stats_${propId}`;
+        const prevSiteCache = this.ztteam_realtimeCache.get(siteCacheKey)?.data;
+
         let activeUsers = 0;
         let topArticles: Array<{ title: string; activeUsers: number }> = [];
         let topCountries: Array<{ country: string; activeUsers: number }> = [];
@@ -433,6 +458,10 @@ export class ZTTeamAnalyticsService {
           });
           activeUsers = parseInt(overviewRes.rows?.[0]?.metricValues?.[0]?.value || '0', 10);
         } catch (err: any) {
+          if (err.message?.includes('RESOURCE_EXHAUSTED')) {
+            hasResourceExhausted = true;
+            activeUsers = prevSiteCache?.activeUsers || 0;
+          }
           this.logger.warn(`Lỗi lấy activeUsers cho ${site.domain} (#${propId}): ${err.message}`);
         }
 
@@ -451,6 +480,10 @@ export class ZTTeamAnalyticsService {
             activeUsers: parseInt(r.metricValues?.[0]?.value || '0', 10),
           }));
         } catch (err: any) {
+          if (err.message?.includes('RESOURCE_EXHAUSTED')) {
+            hasResourceExhausted = true;
+            topArticles = prevSiteCache?.topArticles || [];
+          }
           this.logger.warn(`Lỗi lấy topArticles cho ${site.domain} (#${propId}): ${err.message}`);
         }
 
@@ -469,10 +502,14 @@ export class ZTTeamAnalyticsService {
             activeUsers: parseInt(r.metricValues?.[0]?.value || '0', 10),
           }));
         } catch (err: any) {
+          if (err.message?.includes('RESOURCE_EXHAUSTED')) {
+            hasResourceExhausted = true;
+            topCountries = prevSiteCache?.topCountries || [];
+          }
           this.logger.warn(`Lỗi lấy topCountries cho ${site.domain} (#${propId}): ${err.message}`);
         }
 
-        return {
+        const siteData = {
           id: site.id,
           name: site.name,
           domain: site.domain,
@@ -482,6 +519,13 @@ export class ZTTeamAnalyticsService {
           topCountries,
           ga4Url: `https://analytics.google.com/analytics/web/#/p${propId}/realtime/overview`,
         };
+
+        /** Cập nhật cache riêng cho từng site */
+        if (activeUsers > 0 || !prevSiteCache) {
+          this.ztteam_realtimeCache.set(siteCacheKey, { data: siteData, timestamp: now });
+        }
+
+        return siteData;
       })
     );
 
@@ -490,6 +534,9 @@ export class ZTTeamAnalyticsService {
         return res.value;
       } else {
         const site = sitesToQuery[idx];
+        const prevSiteCache = this.ztteam_realtimeCache.get(`site_stats_${site.propertyId}`)?.data;
+        if (prevSiteCache) return prevSiteCache;
+
         return {
           id: site.id,
           name: site.name,
@@ -506,11 +553,17 @@ export class ZTTeamAnalyticsService {
 
     const totalActiveUsers = siteStats.reduce((sum, s) => sum + (s.activeUsers || 0), 0);
 
-    return {
+    const result = {
       configured: true,
       totalActiveUsers,
       sites: siteStats,
+      quotaWarning: hasResourceExhausted ? 'Google Analytics đang trong thời gian nạp lại Token theo giờ (Quota). Hệ thống giữ nguyên số liệu gần nhất.' : undefined,
       updatedAt: new Date(),
     };
+
+    /** Lưu cache chung */
+    this.ztteam_realtimeCache.set(cacheKey, { data: result, timestamp: now });
+
+    return result;
   }
 }

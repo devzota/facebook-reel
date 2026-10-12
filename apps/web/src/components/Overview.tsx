@@ -198,16 +198,16 @@ export default function Overview() {
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-lg text-emerald-400">insights</span>
               <h3 className="text-sm sm:text-base font-black text-fb-text">Độc Giả Trực Tuyến (Google Analytics 4)</h3>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+              <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400">
                 {gaRealtime.totalActiveUsers} online
               </span>
             </div>
             <button
               onClick={() => navigate('/google-analytics')}
-              className="text-xs font-bold text-fb-blue hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-fb-blue/10 hover:bg-fb-blue/20 text-fb-blue text-xs font-bold transition-all cursor-pointer"
             >
               <span>Xem chi tiết GA4</span>
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <span className="material-symbols-outlined text-xs">arrow_forward</span>
             </button>
           </div>
 
@@ -216,14 +216,14 @@ export default function Overview() {
               <div
                 key={site.id}
                 onClick={() => navigate('/google-analytics')}
-                className="bg-fb-surface rounded-2xl p-4 border border-fb-surface-hover/50 hover:border-slate-600 shadow-md cursor-pointer transition-all flex flex-col justify-between group"
+                className="bg-fb-surface rounded-2xl p-4 shadow-md hover:shadow-lg cursor-pointer transition-all flex flex-col justify-between group"
               >
-                <div className="flex items-center justify-between gap-2 border-b border-fb-surface-hover/30 pb-2.5">
+                <div className="flex items-center justify-between gap-2 pb-2.5">
                   <div className="min-w-0">
                     <h4 className="text-xs font-black text-fb-text truncate group-hover:text-blue-400 transition-colors">{site.name}</h4>
                     <p className="text-[10px] text-fb-text-muted font-mono truncate">{site.domain}</p>
                   </div>
-                  <div className="flex items-center gap-1 text-emerald-400 font-mono font-black text-lg shrink-0">
+                  <div className="flex items-center gap-1 text-emerald-400 font-mono font-black text-lg shrink-0 px-2.5 py-0.5 bg-emerald-500/10 rounded-full">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -232,19 +232,19 @@ export default function Overview() {
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-1.5 text-xs">
+                <div className="mt-2 space-y-1.5 text-xs">
                   {site.topArticles?.[0] ? (
-                    <div className="flex items-start gap-1.5 text-[11px] text-slate-300">
+                    <div className="flex items-start gap-1.5 text-[11px] text-slate-300 p-2 rounded-xl bg-fb-surface-hover/30">
                       <span className="material-symbols-outlined text-xs text-slate-500 shrink-0 mt-0.5">article</span>
                       <span className="line-clamp-1 flex-1 font-medium">{site.topArticles[0].title}</span>
                       <span className="font-mono text-emerald-400 font-bold shrink-0">+{site.topArticles[0].activeUsers}</span>
                     </div>
                   ) : (
-                    <div className="text-[10px] text-slate-500 italic">Chưa có độc giả đọc bài</div>
+                    <div className="text-[10px] text-slate-500 italic p-1.5">Chưa có độc giả đọc bài</div>
                   )}
 
                   {site.topCountries?.[0] && (
-                    <div className="flex items-center justify-between text-[10px] text-fb-text-muted">
+                    <div className="flex items-center justify-between text-[10px] text-fb-text-muted px-1">
                       <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-xs text-cyan-400">public</span>
                         <span>{site.topCountries[0].country}</span>

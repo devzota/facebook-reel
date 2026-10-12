@@ -29,6 +29,7 @@ export default function GoogleAnalyticsPage() {
     configured: boolean;
     totalActiveUsers: number;
     sites: ZTTeamSiteRealtimeData[];
+    quotaWarning?: string;
   } | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -90,10 +91,10 @@ export default function GoogleAnalyticsPage() {
     ztteam_fetchRealtimeAll();
     ztteam_fetchConfig();
 
-    /** Tự động quét lại số liệu mỗi 30 giây */
+    /** Quét định kỳ mỗi 35 giây để bảo vệ hạn mức Quota của Google */
     const interval = setInterval(() => {
       ztteam_fetchRealtimeAll(false);
-    }, 30000);
+    }, 35000);
 
     return () => clearInterval(interval);
   }, []);
@@ -164,7 +165,11 @@ export default function GoogleAnalyticsPage() {
     try {
       const res = await api.post('/analytics/test', { propertyId: propertyId.trim() });
       if (res.data?.success) {
-        ztteam_showToast(`Kết nối thành công! Đang có ${res.data.activeUsers} người online`, 'success');
+        if (res.data?.quotaExhausted) {
+          ztteam_showToast(res.data.message || 'Kết nối GA4 thành công! Google đang nạp lại Token theo giờ.', 'success');
+        } else {
+          ztteam_showToast(`Kết nối GA4 thành công! Hiện có ${res.data.activeUsers} người online`, 'success');
+        }
       }
     } catch (err: any) {
       ztteam_showToast(err.response?.data?.message || 'Kết nối thất bại. Kiểm tra quyền truy cập!', 'error');
@@ -204,8 +209,8 @@ export default function GoogleAnalyticsPage() {
 
   return (
     <div className="w-full space-y-6">
-      {/** Header Bar */}
-      <div className="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-fb-surface-hover/50">
+      {/** Header Bar: Hạn chế border, dùng shadow-lg mượt mà */}
+      <div className="bg-fb-surface rounded-2xl shadow-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
             <span className="material-symbols-outlined text-2xl">insights</span>
@@ -213,13 +218,20 @@ export default function GoogleAnalyticsPage() {
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-xl sm:text-2xl font-black text-fb-text tracking-tight">Google Analytics 4 Realtime</h2>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-xs">
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-400 shadow-xs">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 <span>{realtimeData?.totalActiveUsers !== undefined ? `${realtimeData.totalActiveUsers} Người Đang Online` : 'Đang đồng bộ...'}</span>
               </span>
+
+              {realtimeData?.quotaWarning && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-400">
+                  <span className="material-symbols-outlined text-xs">hourglass_top</span>
+                  <span>Đang nạp lại Token</span>
+                </span>
+              )}
             </div>
             <p className="text-xs sm:text-sm font-medium text-fb-text-muted mt-1">
               Theo dõi người dùng trực tuyến theo thời gian thực trên toàn bộ hệ thống website.
@@ -227,12 +239,12 @@ export default function GoogleAnalyticsPage() {
           </div>
         </div>
 
-        {/** Actions */}
+        {/** Actions: Button chuẩn radius-full */}
         <div className="flex items-center gap-2.5 self-start md:self-auto">
           <button
             onClick={() => ztteam_fetchRealtimeAll(true)}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-fb-surface-hover hover:bg-slate-800 text-fb-text font-bold text-xs border border-slate-700/60 shadow-sm transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-fb-surface-hover hover:bg-slate-800 text-fb-text font-bold text-xs shadow-sm transition-all cursor-pointer"
             title="Làm mới số liệu ngay"
           >
             <span className={`material-symbols-outlined text-base ${isRefreshing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`}>
@@ -246,7 +258,7 @@ export default function GoogleAnalyticsPage() {
               ztteam_fetchConfig();
               setShowConfigModal(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-fb-blue hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-fb-blue hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
           >
             <span className="material-symbols-outlined text-base">settings</span>
             <span>Cài Đặt GA4</span>
@@ -254,20 +266,20 @@ export default function GoogleAnalyticsPage() {
         </div>
       </div>
 
-      {/** Danh Sách Website Cards (Mỗi site 1 card riêng biệt) */}
+      {/** Danh Sách Website Cards (Mỗi site 1 card riêng biệt, hạn chế border) */}
       {isLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 animate-pulse">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-fb-surface rounded-2xl p-5 border border-fb-surface-hover/50 space-y-4">
-              <div className="h-6 bg-fb-surface-hover rounded-xl w-40"></div>
-              <div className="h-16 bg-fb-surface-hover/60 rounded-xl"></div>
-              <div className="h-28 bg-fb-surface-hover/40 rounded-xl"></div>
+            <div key={i} className="bg-fb-surface rounded-2xl p-5 shadow-lg space-y-4">
+              <div className="h-6 bg-fb-surface-hover rounded-full w-40"></div>
+              <div className="h-16 bg-fb-surface-hover/60 rounded-2xl"></div>
+              <div className="h-28 bg-fb-surface-hover/40 rounded-2xl"></div>
             </div>
           ))}
         </div>
       ) : (!realtimeData?.sites || realtimeData.sites.length === 0) ? (
-        <div className="bg-fb-surface rounded-2xl p-10 border border-fb-surface-hover/50 text-center space-y-4 shadow-lg">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+        <div className="bg-fb-surface rounded-2xl p-10 text-center space-y-4 shadow-lg">
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center">
             <span className="material-symbols-outlined text-3xl">cloud_off</span>
           </div>
           <h3 className="text-lg font-bold text-fb-text">Chưa cấu hình theo dõi website nào</h3>
@@ -279,7 +291,7 @@ export default function GoogleAnalyticsPage() {
               ztteam_fetchConfig();
               setShowConfigModal(true);
             }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-fb-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-fb-blue hover:bg-blue-600 text-white rounded-full text-xs font-bold shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
           >
             <span className="material-symbols-outlined text-base">settings</span>
             <span>Cấu Hình GA4 Ngay</span>
@@ -290,11 +302,11 @@ export default function GoogleAnalyticsPage() {
           {realtimeData.sites.map((site) => (
             <div
               key={site.id}
-              className="bg-fb-surface rounded-2xl border border-fb-surface-hover/50 shadow-lg p-5 flex flex-col justify-between hover:border-slate-600/60 transition-all"
+              className="bg-fb-surface rounded-2xl shadow-lg hover:shadow-xl p-5 flex flex-col justify-between transition-all"
             >
               {/** Header Card: Tên site, domain, badge online */}
               <div>
-                <div className="flex items-start justify-between gap-3 border-b border-fb-surface-hover/40 pb-3">
+                <div className="flex items-start justify-between gap-3 pb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-base text-emerald-400">language</span>
@@ -307,25 +319,25 @@ export default function GoogleAnalyticsPage() {
                     </p>
                   </div>
 
-                  {/** 1: Số người đang online */}
+                  {/** 1: Số người đang online (badge radius full) */}
                   <div className="text-right shrink-0">
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-end gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full">
                       <span className="relative flex h-2.5 w-2.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                       </span>
-                      <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
+                      <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
                         {site.activeUsers}
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-fb-text-muted uppercase tracking-wider">
+                    <span className="text-[10px] font-bold text-fb-text-muted uppercase tracking-wider block mt-0.5">
                       Đang Online
                     </span>
                   </div>
                 </div>
 
                 {/** Nội dung card: 2. Ở nước nào + 3. Title bài viết đang online */}
-                <div className="space-y-4 pt-4">
+                <div className="space-y-4 pt-2">
                   {/** 2: Ở nước nào */}
                   <div>
                     <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">
@@ -341,7 +353,7 @@ export default function GoogleAnalyticsPage() {
                         {site.topCountries.slice(0, 4).map((countryItem, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-fb-surface-hover/40 text-xs border border-fb-surface-hover/60"
+                            className="flex items-center justify-between px-3 py-1.5 rounded-full bg-fb-surface-hover/40 text-xs"
                           >
                             <span className="font-semibold text-fb-text truncate max-w-[200px]">
                               {countryItem.country}
@@ -353,7 +365,7 @@ export default function GoogleAnalyticsPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-1 bg-fb-surface-hover/20 rounded-xl px-2.5 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-1.5 bg-fb-surface-hover/20 rounded-full px-3 text-center">
                         Chưa ghi nhận quốc gia
                       </p>
                     )}
@@ -374,7 +386,7 @@ export default function GoogleAnalyticsPage() {
                         {site.topArticles.slice(0, 5).map((article, idx) => (
                           <div
                             key={idx}
-                            className="flex items-start justify-between gap-2 px-2.5 py-2 rounded-xl bg-fb-surface-hover/40 hover:bg-fb-surface-hover text-xs border border-fb-surface-hover/60 transition-colors"
+                            className="flex items-start justify-between gap-2 px-3 py-2 rounded-2xl bg-fb-surface-hover/40 hover:bg-fb-surface-hover text-xs transition-colors"
                           >
                             <span
                               className="font-medium text-fb-text line-clamp-2 text-[11px] leading-tight"
@@ -389,7 +401,7 @@ export default function GoogleAnalyticsPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-fb-text-muted italic py-1 bg-fb-surface-hover/20 rounded-xl px-2.5 text-center">
+                      <p className="text-xs text-fb-text-muted italic py-1.5 bg-fb-surface-hover/20 rounded-full px-3 text-center">
                         Chưa có độc giả đọc bài
                       </p>
                     )}
@@ -397,8 +409,8 @@ export default function GoogleAnalyticsPage() {
                 </div>
               </div>
 
-              {/** Footer Card: Link mở App GA4 của Google */}
-              <div className="border-t border-fb-surface-hover/40 pt-3 mt-4 flex items-center justify-between">
+              {/** Footer Card: Link mở App GA4 của Google (Button radius full) */}
+              <div className="pt-4 mt-4 flex items-center justify-between">
                 <span className="text-[11px] text-fb-text-muted font-mono">
                   Property #{site.propertyId}
                 </span>
@@ -407,7 +419,7 @@ export default function GoogleAnalyticsPage() {
                   href={site.ga4Url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-fb-blue hover:text-blue-400 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fb-blue/10 hover:bg-fb-blue/20 text-fb-blue text-xs font-bold transition-colors"
                   title="Mở báo cáo đầy đủ trong app Google Analytics"
                 >
                   <span>Mở GA4 Trực Tiếp</span>
@@ -426,11 +438,11 @@ export default function GoogleAnalyticsPage() {
             className="fixed inset-0"
             onClick={() => setShowConfigModal(false)}
           />
-          <div className="relative bg-fb-surface rounded-2xl border border-fb-surface-hover shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col z-10 overflow-hidden">
+          <div className="relative bg-fb-surface rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col z-10 overflow-hidden">
             {/** Header Modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-fb-surface-hover/50 bg-fb-surface">
+            <div className="flex items-center justify-between px-6 py-4.5 bg-fb-surface">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-fb-blue flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 text-fb-blue flex items-center justify-center">
                   <span className="material-symbols-outlined text-xl">settings</span>
                 </div>
                 <div>
@@ -441,7 +453,7 @@ export default function GoogleAnalyticsPage() {
               <button
                 type="button"
                 onClick={() => setShowConfigModal(false)}
-                className="text-fb-text-muted hover:text-fb-text p-1.5 rounded-xl hover:bg-fb-surface-hover transition-colors cursor-pointer"
+                className="text-fb-text-muted hover:text-fb-text p-2 rounded-full hover:bg-fb-surface-hover transition-colors cursor-pointer"
               >
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
@@ -455,7 +467,7 @@ export default function GoogleAnalyticsPage() {
                   <label className="text-xs font-black uppercase tracking-wider text-fb-text">
                     1. File Service Account JSON (Google Cloud)
                   </label>
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-fb-surface-hover hover:bg-slate-800 text-fb-text border border-slate-700/60 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-xs">
+                  <label className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-fb-surface-hover hover:bg-slate-800 text-fb-text rounded-full text-xs font-bold cursor-pointer transition-all shadow-xs">
                     <span className="material-symbols-outlined text-sm text-fb-blue">upload_file</span>
                     <span>Tải file .json lên</span>
                     <input
@@ -473,12 +485,12 @@ export default function GoogleAnalyticsPage() {
                     value={configCredentialsJson}
                     onChange={(e) => setConfigCredentialsJson(e.target.value)}
                     placeholder='Dán toàn bộ nội dung file Service Account JSON vào đây (vd: { "type": "service_account", "client_email": "..." })'
-                    className="w-full bg-black/40 border border-slate-700/80 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-fb-blue focus:ring-1 focus:ring-fb-blue transition-all"
+                    className="w-full bg-black/40 rounded-2xl p-3.5 text-xs font-mono text-slate-200 focus:outline-none focus:ring-1 focus:ring-fb-blue transition-all"
                   />
                 </div>
 
                 {configClientEmail && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-blue-500/10 text-xs text-blue-300">
                     <span className="material-symbols-outlined text-sm text-blue-400">verified_user</span>
                     <span className="truncate">Email Service Account: <b>{configClientEmail}</b></span>
                   </div>
@@ -489,7 +501,7 @@ export default function GoogleAnalyticsPage() {
               </div>
 
               {/** 2. Danh sách Website cần theo dõi */}
-              <div className="space-y-3 pt-2 border-t border-fb-surface-hover/50">
+              <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-fb-text">
@@ -502,7 +514,7 @@ export default function GoogleAnalyticsPage() {
                   <button
                     type="button"
                     onClick={ztteam_handleAddSite}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-full text-xs font-bold transition-all cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-sm">add</span>
                     <span>Thêm Site</span>
@@ -513,7 +525,7 @@ export default function GoogleAnalyticsPage() {
                   {configSites.map((siteItem, idx) => (
                     <div
                       key={siteItem.id}
-                      className="p-3.5 rounded-xl bg-fb-surface-hover/30 border border-fb-surface-hover/60 space-y-3"
+                      className="p-4 rounded-2xl bg-fb-surface-hover/30 space-y-3 shadow-xs"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-black text-fb-text">
@@ -528,7 +540,7 @@ export default function GoogleAnalyticsPage() {
                               type="button"
                               onClick={() => ztteam_handleUpdateSite(siteItem.id, 'active', !siteItem.active)}
                               className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                                siteItem.active ? 'bg-emerald-500' : 'bg-black/30 shadow-inner border border-white/5'
+                                siteItem.active ? 'bg-emerald-500' : 'bg-black/30 shadow-inner'
                               }`}
                             >
                               <span
@@ -543,7 +555,7 @@ export default function GoogleAnalyticsPage() {
                           <button
                             type="button"
                             onClick={() => ztteam_handleDeleteSite(siteItem.id)}
-                            className="text-red-400 hover:text-red-300 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                            className="text-red-400 hover:text-red-300 p-1.5 rounded-full hover:bg-red-500/10 transition-colors"
                             title="Xóa website này"
                           >
                             <span className="material-symbols-outlined text-base">delete</span>
@@ -562,7 +574,7 @@ export default function GoogleAnalyticsPage() {
                             value={siteItem.name}
                             onChange={(e) => ztteam_handleUpdateSite(siteItem.id, 'name', e.target.value)}
                             placeholder="vd: Thiệp Online"
-                            className="w-full bg-black/40 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-fb-blue"
+                            className="w-full bg-black/40 rounded-full px-3.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-fb-blue"
                           />
                         </div>
 
@@ -576,7 +588,7 @@ export default function GoogleAnalyticsPage() {
                             value={siteItem.domain}
                             onChange={(e) => ztteam_handleUpdateSite(siteItem.id, 'domain', e.target.value)}
                             placeholder="vd: thieponline.store"
-                            className="w-full bg-black/40 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-fb-blue"
+                            className="w-full bg-black/40 rounded-full px-3.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-fb-blue"
                           />
                         </div>
 
@@ -591,13 +603,13 @@ export default function GoogleAnalyticsPage() {
                               value={siteItem.propertyId}
                               onChange={(e) => ztteam_handleUpdateSite(siteItem.id, 'propertyId', e.target.value)}
                               placeholder="vd: 520258342"
-                              className="w-full bg-black/40 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-fb-blue"
+                              className="w-full bg-black/40 rounded-full px-3.5 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none focus:ring-1 focus:ring-fb-blue"
                             />
                             <button
                               type="button"
                               onClick={() => ztteam_handleTestSite(siteItem.id, siteItem.propertyId)}
                               disabled={testingSiteId === siteItem.id}
-                              className="px-2.5 py-1.5 bg-fb-surface-hover hover:bg-slate-800 text-fb-text rounded-xl border border-slate-700 text-xs font-bold shrink-0 transition-all cursor-pointer"
+                              className="p-2 bg-fb-surface-hover hover:bg-slate-800 text-fb-text rounded-full shrink-0 transition-all cursor-pointer shadow-xs"
                               title="Kiểm tra kết nối"
                             >
                               {testingSiteId === siteItem.id ? (
@@ -615,12 +627,12 @@ export default function GoogleAnalyticsPage() {
               </div>
             </div>
 
-            {/** Footer Modal */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-fb-surface-hover/50 bg-fb-surface">
+            {/** Footer Modal: Buttons radius-full */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-fb-surface">
               <button
                 type="button"
                 onClick={() => setShowConfigModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover transition-colors cursor-pointer"
+                className="px-5 py-2 rounded-full text-xs font-bold text-fb-text-muted hover:text-fb-text hover:bg-fb-surface-hover transition-colors cursor-pointer"
               >
                 Hủy Bỏ
               </button>
@@ -628,7 +640,7 @@ export default function GoogleAnalyticsPage() {
                 type="button"
                 onClick={ztteam_handleSaveConfig}
                 disabled={isSavingConfig}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-fb-blue hover:bg-blue-600 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2 rounded-full bg-fb-blue hover:bg-blue-600 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
               >
                 {isSavingConfig ? (
                   <>
