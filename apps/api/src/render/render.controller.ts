@@ -193,7 +193,7 @@ export class ZTTeamRenderController {
     const lastPostedMap = new Map<string, Date>();
     for (const r of lastPostedReels) lastPostedMap.set(r.page_id, r.posted_at || r.updated_at);
     for (const img of lastPostedImages) {
-      if (img.posted_at) {
+      if (img.page_id && img.posted_at) {
         const existing = lastPostedMap.get(img.page_id);
         if (!existing || img.posted_at > existing) {
           lastPostedMap.set(img.page_id, img.posted_at);

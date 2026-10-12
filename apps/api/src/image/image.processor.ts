@@ -237,10 +237,13 @@ export class ZTTeamImageProcessor implements OnModuleInit {
     /** Try fetching full story content and post metadata from WordPress */
     if (wpPostId) {
       try {
-        const page = await this.prisma.ztteam_pages.findUnique({
-          where: { id: pageId || image.page_id },
-          include: { sources: true },
-        });
+        const effectivePageId = pageId || image.page_id;
+        const page = effectivePageId
+          ? await this.prisma.ztteam_pages.findUnique({
+              where: { id: effectivePageId },
+              include: { sources: true },
+            })
+          : null;
         const source = page?.sources?.[0];
         if (source?.target_site_id) {
           wpSite = await this.prisma.ztteam_target_sites.findUnique({
@@ -750,6 +753,8 @@ export class ZTTeamImageProcessor implements OnModuleInit {
   async ztteam_testRenderQueueItem(imageId: string): Promise<string> {
     const image = await this.prisma.ztteam_images.findUnique({ where: { id: imageId } });
     if (!image) throw new Error('Queue item not found');
+
+    if (!image.page_id) throw new Error('Bài viết không thuộc Fanpage nào');
 
     const page = await this.prisma.ztteam_pages.findUnique({ where: { id: image.page_id } });
     if (!page) throw new Error('Page not found');

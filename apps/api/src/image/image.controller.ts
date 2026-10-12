@@ -101,16 +101,11 @@ export class ZTTeamImageController {
     const limitNum = Math.max(1, parseInt(limit, 10) || 24);
     const skip = (pageNum - 1) * limitNum;
 
-    /** Base where theo User sở hữu Fanpage */
-    const baseWhere: any = {
-      page: {
-        fb_account: {
-          owner_user_id: req.user.sub,
-        },
-      },
-    };
-
-    if (fbPageId) {
+    /** Base where theo User sở hữu Fanpage HOẶC bài đăng thủ công độc lập (page_id = null) */
+    let baseWhere: any;
+    if (fbPageId === 'MANUAL' || fbPageId === 'manual') {
+      baseWhere = { page_id: null };
+    } else if (fbPageId) {
       const p = await this.prisma.ztteam_pages.findFirst({
         where: {
           OR: [
@@ -126,7 +121,22 @@ export class ZTTeamImageController {
           counts: { total: 0, queued: 0, rendering: 0, completed: 0, posted: 0, failed: 0 },
         };
       }
-      baseWhere.page_id = p.id;
+      baseWhere = { page_id: p.id };
+    } else {
+      baseWhere = {
+        OR: [
+          {
+            page: {
+              fb_account: {
+                owner_user_id: req.user.sub,
+              },
+            },
+          },
+          {
+            page_id: null,
+          },
+        ],
+      };
     }
 
     /** Điều kiện where cho danh sách hiển thị */
@@ -204,7 +214,7 @@ export class ZTTeamImageController {
       }),
     ]);
 
-    const pageIds = [...new Set(images.map(r => r.page_id))];
+    const pageIds = [...new Set(images.map(r => r.page_id).filter((id): id is string => Boolean(id)))];
     const lastPostedImages = await this.prisma.ztteam_images.findMany({
       where: { page_id: { in: pageIds }, is_posted: true },
       orderBy: { posted_at: 'desc' },
@@ -218,7 +228,7 @@ export class ZTTeamImageController {
 
     const lastPostedMap = new Map<string, Date>();
     for (const img of lastPostedImages) {
-      if (img.posted_at) lastPostedMap.set(img.page_id, img.posted_at);
+      if (img.page_id && img.posted_at) lastPostedMap.set(img.page_id, img.posted_at);
     }
     for (const r of lastPostedReels) {
       const existing = lastPostedMap.get(r.page_id);
@@ -241,7 +251,7 @@ export class ZTTeamImageController {
     for (const pending of allPending) {
        const pageId = pending.page_id;
        const p = pending.page as any;
-       if (!p) continue;
+       if (!pageId || !p) continue;
 
        let baseTime = pageNextTimeMap.get(pageId);
        if (!baseTime) {
@@ -369,6 +379,11 @@ export class ZTTeamImageController {
       throw new Error('Image file not found on disk');
     }
 
+    if (!image.page || !image.page.fb_page_id || !image.page_id) {
+      throw new BadRequestException('Bài viết này không thuộc Fanpage Facebook nào để đăng tự động. Vui lòng đăng thủ công.');
+    }
+
+    const targetFbPageId = image.page.fb_page_id;
     let description = image.ai_caption || image.wp_post_title || '';
     let trackingLinkManual = '';
     
@@ -382,7 +397,7 @@ export class ZTTeamImageController {
       const pageData = await this.prisma.ztteam_pages.findUnique({
         where: { id: image.page_id },
         include: { fb_account: true }
-      });
+      }) as any;
       const utmMedium = slugify(pageData?.fb_account?.name || 'account');
       const utmCampaign = slugify(pageData?.name || 'page');
       trackingLinkManual = `${image.wp_post_url}${image.wp_post_url.includes('?') ? '&' : '?'}utm_source=image&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
@@ -416,7 +431,7 @@ export class ZTTeamImageController {
 
         if (fs.existsSync(absoluteVideoPath)) {
           const response = await this.facebookService.ztteam_publishReel(
-            image.page.fb_page_id,
+            targetFbPageId,
             absoluteVideoPath,
             description
           );
@@ -424,7 +439,7 @@ export class ZTTeamImageController {
         } else {
           /** Nếu file video không tìm thấy trên server -> fallback đăng Ảnh */
           fbPostId = await this.facebookService.ztteam_publishPhoto(
-            image.page.fb_page_id,
+            targetFbPageId,
             absoluteImagePath,
             description
           );
@@ -432,7 +447,7 @@ export class ZTTeamImageController {
       } else {
         /** Bài chưa tạo video Reel -> Fallback đăng Ảnh để đảm bảo luôn có bài xuất bản */
         fbPostId = await this.facebookService.ztteam_publishPhoto(
-          image.page.fb_page_id,
+          targetFbPageId,
           absoluteImagePath,
           description
         );
@@ -440,7 +455,7 @@ export class ZTTeamImageController {
     } else if (pageFormat === 'image') {
       /** Cấu hình: Nếu chọn ảnh thì chắc chắn phải đăng ảnh */
       fbPostId = await this.facebookService.ztteam_publishPhoto(
-        image.page.fb_page_id,
+        targetFbPageId,
         absoluteImagePath,
         description
       );
@@ -456,21 +471,21 @@ export class ZTTeamImageController {
 
         if (fs.existsSync(absoluteVideoPath)) {
           const response = await this.facebookService.ztteam_publishReel(
-            image.page.fb_page_id,
+            targetFbPageId,
             absoluteVideoPath,
             description
           );
           fbPostId = response.id;
         } else {
           fbPostId = await this.facebookService.ztteam_publishPhoto(
-            image.page.fb_page_id,
+            targetFbPageId,
             absoluteImagePath,
             description
           );
         }
       } else {
         fbPostId = await this.facebookService.ztteam_publishPhoto(
-          image.page.fb_page_id,
+          targetFbPageId,
           absoluteImagePath,
           description
         );
@@ -584,7 +599,7 @@ export class ZTTeamImageController {
 
     const jobId = await this.imageProcessor.ztteam_addJob({
       imageId: image.id,
-      pageId: image.page_id,
+      pageId: image.page_id || '',
       wpPostId: image.wp_post_id,
       templateId: image.template_id,
     });
@@ -1013,5 +1028,32 @@ export class ZTTeamImageController {
     return { success: true, post: updated };
   }
 
+  /**
+   * ZTTeam: Đánh dấu bài viết đã đăng thủ công
+   * POST /api/image/:id/mark-posted
+   */
+  @Post(':id/mark-posted')
+  @UseGuards(ZTTeamAuthGuard)
+  async ztteam_markPosted(@Param('id') id: string) {
+    const img = await this.prisma.ztteam_images.findUnique({
+      where: { id },
+    });
 
+    if (!img) {
+      throw new BadRequestException('Không tìm thấy bài viết');
+    }
+
+    const updated = await this.prisma.ztteam_images.update({
+      where: { id },
+      data: {
+        is_posted: true,
+        status: 'POSTED',
+        posted_at: new Date(),
+      },
+    });
+
+    this.eventEmitter.emit('image.updated', updated);
+
+    return { success: true, message: 'Đã đánh dấu bài viết là đã đăng thành công', data: updated };
+  }
 }

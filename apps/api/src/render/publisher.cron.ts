@@ -69,7 +69,7 @@ export class ZTTeamPublisherCron {
         }
       }
       for (const img of pendingImages) {
-        if (img.page && !pagesMap.has(img.page_id)) {
+        if (img.page && img.page_id && !pagesMap.has(img.page_id)) {
           pagesMap.set(img.page_id, img.page);
         }
       }

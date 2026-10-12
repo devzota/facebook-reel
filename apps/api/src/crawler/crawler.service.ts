@@ -339,6 +339,78 @@ export class ZTTeamCrawlerService {
       this.logger.log(`Created Fanpage ready-to-post image item: ${imgRecord.id} for Page ${targetPage.id} (${targetPage.name})`);
     }
 
+    /** ZTTeam: Trường hợp KHÔNG CÓ Fanpage nào hoạt động -> Lưu bài viết vào Kho Đăng Thủ Công độc lập (page_id = null) */
+    if (targetPages.length === 0) {
+      const captionCTA = '...FULL STORY IN THE COMMENT 👇👇👇';
+      const fanpageCaption = `${titleUppercase}\n\n${part1}\n\n${captionCTA}`;
+      const commentCTA = `👉 FULL STORY HERE 👇👇👇\n${wpResult.url}`;
+      const firstCommentText = part2 ? `${part2}\n\n${commentCTA}` : commentCTA;
+
+      let imgRecord = await this.prisma.ztteam_images.findFirst({
+        where: {
+          page_id: null,
+          wp_post_id: wpResult.id.toString(),
+        },
+      });
+
+      if (imgRecord) {
+        imgRecord = await this.prisma.ztteam_images.update({
+          where: { id: imgRecord.id },
+          data: {
+            wp_post_title: storyTitle,
+            wp_post_url: wpResult.url,
+            template_id: currentTemplateId,
+            image_url: image2kUrl,
+            ai_caption: fanpageCaption,
+            ai_first_comment: firstCommentText,
+            comment_step: 0,
+            status: 'COMPLETED',
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        imgRecord = await this.prisma.ztteam_images.create({
+          data: {
+            page_id: null,
+            wp_post_id: wpResult.id.toString(),
+            wp_post_title: storyTitle,
+            wp_post_url: wpResult.url,
+            template_id: currentTemplateId,
+            image_url: image2kUrl,
+            ai_caption: fanpageCaption,
+            ai_first_comment: firstCommentText,
+            comment_step: 0,
+            status: 'COMPLETED',
+            is_posted: false,
+          },
+        });
+      }
+      if (!createdImageId) createdImageId = imgRecord.id;
+
+      /** Copy image to standard storage folder */
+      try {
+        const targetDir = ztteam_getImagesPath(imgRecord.id);
+        fs.mkdirSync(targetDir, { recursive: true });
+        if (imageLocalPath && fs.existsSync(imageLocalPath)) {
+          fs.copyFileSync(imageLocalPath, path.join(targetDir, 'output.png'));
+          await this.prisma.ztteam_images.update({
+            where: { id: imgRecord.id },
+            data: {
+              image_url: `/storage/images/${imgRecord.id}/output.png`,
+            },
+          });
+        }
+        if (sourceBackupLocalPath && fs.existsSync(sourceBackupLocalPath)) {
+          fs.copyFileSync(sourceBackupLocalPath, path.join(targetDir, 'source_original.png'));
+        }
+      } catch (copyErr: any) {
+        this.logger.warn(`Failed to copy image to standard folder: ${copyErr.message}`);
+      }
+
+      this.logger.log(`[Manual Studio] Created standalone manual post: ${imgRecord.id} (wp_post_id: ${wpResult.id}) with page_id = null`);
+    }
+
     /** 6. Record to crawl history for Dashboard & UI tracking */
     try {
       let source: any = null;

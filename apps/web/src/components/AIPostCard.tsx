@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useUIStore } from '../stores/uiStore';
+import api from '../services/api';
 
 export interface ZTTeamAIPostCardProps {
   item: any;
@@ -12,6 +14,7 @@ export interface ZTTeamAIPostCardProps {
   onZoom?: (imageUrl: string) => void;
   onQueueVideo?: (item: any) => void;
   onUseOriginalImage?: (item: any) => void;
+  onMarkPosted?: (item: any) => void;
 }
 
 /**
@@ -30,9 +33,12 @@ export default function ZTTeamAIPostCard({
   onZoom,
   onQueueVideo,
   onUseOriginalImage,
+  onMarkPosted,
 }: ZTTeamAIPostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [isMarkingPosted, setIsMarkingPosted] = useState(false);
+  const { ztteam_showToast } = useUIStore();
 
   const isRendering = item.status === 'RENDERING' || item.status === 'PROCESSING' || item.status === 'QUEUED';
   const isCompleted = item.status === 'COMPLETED';
@@ -42,10 +48,54 @@ export default function ZTTeamAIPostCard({
   /** ZTTeam: Cho phép Đăng Ngay thủ công bất cứ lúc nào đã có ảnh và chưa đăng Facebook thành công (kể cả khi vừa bị lỗi đăng) */
   const canPostNow = hasImage && !isPosted && !isRendering;
   const isAlreadyPosted = isPosted;
+  const isStandaloneManual = !item.page_id;
 
-  const resolvedPageName = pageName || item.page?.name || 'Fanpage Facebook';
+  const resolvedPageName = isStandaloneManual
+    ? 'Đăng Thủ Công'
+    : (pageName || item.page?.name || 'Fanpage Facebook');
   const resolvedAvatar = pageAvatar || item.page?.avatar;
   const resolvedFbPageId = fbPageId || item.page?.fb_page_id;
+
+  /** ZTTeam: Thao tác sao chép nhanh 1-Click cho chế độ đăng thủ công */
+  const ztteam_handleCopyCaption = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(storyContent);
+      ztteam_showToast('Đã sao chép Caption vào bộ nhớ tạm!', 'success');
+    }
+  };
+
+  const ztteam_handleCopyComment1 = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hookText = `...I know you're all very curious about what happens next, so if you want to read on, leave "YES" in the comments below! 👇`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(hookText);
+      ztteam_showToast('Đã sao chép Bình luận mồi (YES)!', 'success');
+    }
+  };
+
+  const ztteam_handleCopyComment2 = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const comment2Text = item.ai_first_comment || `👉 FULL STORY HERE 👇👇👇\n${item.wp_post_url || ''}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(comment2Text);
+      ztteam_showToast('Đã sao chép Bình luận link Part 2!', 'success');
+    }
+  };
+
+  const ztteam_handleMarkPosted = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      setIsMarkingPosted(true);
+      await api.post(`/image/${item.id}/mark-posted`);
+      ztteam_showToast('Đã đánh dấu bài viết là Đã đăng thành công!', 'success');
+      if (onMarkPosted) onMarkPosted(item);
+    } catch (err: any) {
+      ztteam_showToast(err.response?.data?.message || 'Lỗi cập nhật trạng thái', 'error');
+    } finally {
+      setIsMarkingPosted(false);
+    }
+  };
 
   /** Format Date: Định dạng ngắn gọn HH:mm dd/MM (ví dụ: 16:30 07/10) */
   const ztteam_formatDate = (dateStr: string) => {
@@ -165,8 +215,13 @@ export default function ZTTeamAIPostCard({
             </div>
           )}
           <div className="min-w-0">
-            <h4 className="text-sm font-bold text-fb-text truncate leading-tight">
-              {resolvedPageName}
+            <h4 className="text-sm font-bold text-fb-text truncate leading-tight flex items-center gap-1.5">
+              <span>{resolvedPageName}</span>
+              {isStandaloneManual && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  Thủ công
+                </span>
+              )}
             </h4>
             <div className="flex items-center gap-1.5 text-[11px] text-fb-text-muted mt-0.5">
               <span>{isAlreadyPosted ? `Đã đăng: ${ztteam_formatDate(item.posted_at || item.updated_at)}` : item.scheduled_at ? `Dự kiến: ${ztteam_formatDate(item.scheduled_at)}` : `Tạo lúc: ${ztteam_formatDate(item.created_at)}`}</span>
@@ -378,17 +433,29 @@ export default function ZTTeamAIPostCard({
         >
           {storyContent}
         </div>
-        <div className="mt-1 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-0.5 transition-colors p-0 cursor-pointer"
-          >
-            <span>{isExpanded ? 'Thu gọn' : 'Xem thêm nội dung'}</span>
-            <span className="material-symbols-outlined text-[14px]">
-              {isExpanded ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-0.5 transition-colors p-0 cursor-pointer"
+            >
+              <span>{isExpanded ? 'Thu gọn' : 'Xem thêm'}</span>
+              <span className="material-symbols-outlined text-[14px]">
+                {isExpanded ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={ztteam_handleCopyCaption}
+              className="text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-md transition-colors cursor-pointer"
+              title="Sao chép toàn bộ Caption bài viết"
+            >
+              <span className="material-symbols-outlined text-[13px]">content_copy</span>
+              <span>Copy Caption</span>
+            </button>
+          </div>
 
           {item.wp_post_url && (
             <a
@@ -412,6 +479,15 @@ export default function ZTTeamAIPostCard({
             <div className="flex items-center gap-1.5 text-blue-400">
               <span className="material-symbols-outlined text-[14px]">bolt</span>
               <span>Bình luận 1: Mồi kích hoạt (Sau 1h)</span>
+              <button
+                type="button"
+                onClick={ztteam_handleCopyComment1}
+                className="text-[10px] font-bold text-blue-300 hover:text-white flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-500/20 hover:bg-blue-500/30 rounded border border-blue-500/30 transition-colors cursor-pointer ml-1"
+                title="Sao chép bình luận mồi"
+              >
+                <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                <span>Copy</span>
+              </button>
             </div>
 
             {isAlreadyPosted ? (
@@ -439,12 +515,21 @@ export default function ZTTeamAIPostCard({
           </p>
         </div>
 
-        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (T = 75 phút) */}
+        {/** Tầng 2: Bình luận lồng nhau Reply Part 2 & Link (Sau 2h) */}
         <div className="ml-3 pl-2.5 border-l-2 border-blue-500/30 space-y-1.5">
           <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-fb-text">
             <div className="flex items-center gap-1 text-cyan-400">
               <span className="material-symbols-outlined text-[14px]">reply</span>
-              <span>Bình luận 2: Trả lời Part 2 & Link (Sau 15p)</span>
+              <span>Bình luận 2: Trả lời Part 2 & Link</span>
+              <button
+                type="button"
+                onClick={ztteam_handleCopyComment2}
+                className="text-[10px] font-bold text-cyan-300 hover:text-white flex items-center gap-0.5 px-1.5 py-0.5 bg-cyan-500/20 hover:bg-cyan-500/30 rounded border border-cyan-500/30 transition-colors cursor-pointer ml-1"
+                title="Sao chép bình luận Part 2 & link"
+              >
+                <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                <span>Copy</span>
+              </button>
             </div>
 
             {isAlreadyPosted ? (
@@ -456,7 +541,7 @@ export default function ZTTeamAIPostCard({
               ) : item.comment_step === 1 ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                  Chờ 15p
+                  Chờ 2h
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
@@ -467,7 +552,7 @@ export default function ZTTeamAIPostCard({
             ) : (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-fb-text-muted border border-white/10 flex items-center gap-1">
                 <span className="material-symbols-outlined text-[12px]">schedule</span>
-                Tự động sau 75p
+                Tự động sau 2h
               </span>
             )}
           </div>
@@ -482,8 +567,8 @@ export default function ZTTeamAIPostCard({
       {/** 7. Actions Footer Bar */}
       <div className="mt-auto px-4 py-3 bg-fb-bg/60 border-t border-fb-surface-hover/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-1">
-          {/** Button Đăng Ngay: CHỈ HIỂN THỊ KHI CHƯA ĐĂNG */}
-          {canPostNow && onPostNow && (
+          {/** Button Đăng Ngay: CHỈ HIỂN THỊ KHI CHƯA ĐĂNG VÀ CÓ PAGE */}
+          {canPostNow && onPostNow && !isStandaloneManual && (
             <button
               type="button"
               onClick={() => onPostNow(item)}
@@ -500,6 +585,33 @@ export default function ZTTeamAIPostCard({
                 <>
                   <span className="material-symbols-outlined text-[15px]">send</span>
                   <span>Đăng Ngay</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/** Nút Đã Đăng Thủ Công: Cho phép người dùng đánh dấu bài viết đã đăng */}
+          {!isAlreadyPosted && (
+            <button
+              type="button"
+              onClick={ztteam_handleMarkPosted}
+              disabled={isMarkingPosted}
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                isStandaloneManual
+                  ? 'flex-1 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                  : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+              }`}
+              title="Đánh dấu đã đăng bài viết thủ công lên Facebook"
+            >
+              {isMarkingPosted ? (
+                <>
+                  <span className="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                  <span>Đang lưu...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[15px]">done_all</span>
+                  <span>Đã Đăng Thủ Công</span>
                 </>
               )}
             </button>

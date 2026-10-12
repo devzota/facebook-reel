@@ -322,7 +322,8 @@ export default function AIFactory() {
                 setCurrentPage(1);
               }}
               options={[
-                { value: '', label: 'Tất cả Fanpage' },
+                { value: '', label: 'Tất cả nguồn bài' },
+                { value: 'MANUAL', label: '✍️ Kho Đăng Thủ Công (Độc lập)' },
                 ...pages.map((p: any) => ({
                   value: p.id,
                   label: ztteam_decodeHtmlEntity(p.name),
@@ -423,6 +424,7 @@ export default function AIFactory() {
                   onDelete={ztteam_deleteItem}
                   onQueueVideo={ztteam_queueVideoReel}
                   onUseOriginalImage={ztteam_useOriginalImage}
+                  onMarkPosted={() => ztteam_loadItems(true)}
                 />
               ))}
             </div>

@@ -225,7 +225,7 @@ model ztteam_reel_history {
 /** Stores rendered image posts */
 model ztteam_images {
   id              String    @id @default(cuid())
-  page_id         String
+  page_id         String?
   wp_post_id      String
   wp_post_title   String
   wp_post_url     String?
@@ -249,7 +249,7 @@ model ztteam_images {
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
-  page            ztteam_pages @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  page            ztteam_pages? @relation(fields: [page_id], references: [id], onDelete: Cascade)
 }
 
 /** Tracks which posts have been used for images on each page */
