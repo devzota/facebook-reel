@@ -122,6 +122,7 @@ model ztteam_target_sites {
   wp_username               String
   wp_app_password_encrypted String
   status                    String   @default("active")
+  is_manual                 Boolean  @default(false)
   owner_user_id             String
   created_at                DateTime @default(now())
   updated_at                DateTime @updatedAt

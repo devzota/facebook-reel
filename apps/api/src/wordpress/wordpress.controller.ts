@@ -13,7 +13,7 @@ export class ZTTeamWordpressController {
   }
 
   @Post('sites')
-  ztteam_createSite(@Body() body: { wpUrl: string; wpUsername: string; wpAppPassword: string }, @Request() req: any) {
+  ztteam_createSite(@Body() body: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }, @Request() req: any) {
     return this.wordpressService.ztteam_createTargetSite(req.user.sub, body);
   }
 
@@ -23,8 +23,13 @@ export class ZTTeamWordpressController {
   }
 
   @Patch('sites/:id')
-  ztteam_updateSite(@Param('id') id: string, @Body() body: { wpUrl: string; wpUsername: string; wpAppPassword?: string }, @Request() req: any) {
+  ztteam_updateSite(@Param('id') id: string, @Body() body: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }, @Request() req: any) {
     return this.wordpressService.ztteam_updateTargetSite(req.user.sub, id, body);
+  }
+
+  @Patch('sites/:id/toggle-manual')
+  ztteam_toggleSiteManual(@Param('id') id: string, @Body() body: { isManual: boolean }, @Request() req: any) {
+    return this.wordpressService.ztteam_toggleSiteManual(req.user.sub, id, body.isManual);
   }
 
   @Delete('sites/:id')

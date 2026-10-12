@@ -161,7 +161,16 @@ export class ZTTeamCrawlerService {
 
     /** 5. Determine Target Fanpage (Exclusive 1 Post per Fanpage across same Source & Category) */
     const targetPages: any[] = [];
-    if (pageId) {
+
+    /** ZTTeam: Kiểm tra xem Website WordPress đích có đang bật Chế độ Đăng Thủ Công không */
+    const targetSiteConfig = await this.prisma.ztteam_target_sites.findUnique({
+      where: { id: targetSiteId },
+      select: { is_manual: true }
+    });
+
+    if (targetSiteConfig?.is_manual) {
+      this.logger.log(`Target Site #${targetSiteId} được cấu hình [CHẾ ĐỘ ĐĂNG THỦ CÔNG]. Chuyển thẳng bài viết vào Kho Đăng Thủ Công độc lập.`);
+    } else if (pageId) {
       const p = await this.prisma.ztteam_pages.findUnique({ where: { id: pageId } });
       if (p) targetPages.push(p);
     } else {
@@ -245,11 +254,12 @@ export class ZTTeamCrawlerService {
         targetPages.push(chosenPage);
         this.logger.log(`[Round-Robin] Assigned story #${wpResult.id} exclusively to Page: ${chosenPage.name} (${chosenPage.id})`);
       } else if (candidatePages.length === 0) {
-        /** Fallback only if no candidate pages configured at all */
-        const fallbackPage = await this.prisma.ztteam_pages.findFirst({
-          where: { is_active: true },
-        });
-        if (fallbackPage) targetPages.push(fallbackPage);
+        /**
+         * ZTTeam: Nguồn cào này không có Fanpage nào liên kết active.
+         * Tuyệt đối KHÔNG fallback tự ý gán vào Fanpage khác.
+         * Để targetPages rỗng ([]) để hệ thống chuyển sang lưu vào Kho Đăng Thủ Công độc lập (page_id: null).
+         */
+        this.logger.log(`Nguồn cào (Target site #${targetSiteId}) không có Fanpage nào liên kết active. Tự động chuyển bài viết sang Kho Đăng Thủ Công.`);
       } else {
         this.logger.log(`Story #${wpResult.id} has already been assigned to all matching Fanpages. Skipping duplicate assignment.`);
       }

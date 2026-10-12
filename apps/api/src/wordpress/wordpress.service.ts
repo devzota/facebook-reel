@@ -104,7 +104,7 @@ export class ZTTeamWordpressService {
     return true;
   }
 
-  async ztteam_createTargetSite(userId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword: string }) {
+  async ztteam_createTargetSite(userId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }) {
     await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
 
     return this.prisma.ztteam_target_sites.create({
@@ -113,12 +113,13 @@ export class ZTTeamWordpressService {
         wp_url: data.wpUrl,
         wp_username: data.wpUsername,
         wp_app_password_encrypted: this.ztteam_encrypt(data.wpAppPassword),
-        status: 'active'
+        status: 'active',
+        is_manual: data.isManual ?? false
       }
     });
   }
 
-  async ztteam_updateTargetSite(userId: string, siteId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string }) {
+  async ztteam_updateTargetSite(userId: string, siteId: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }) {
     if (data.wpAppPassword) {
       await this.ztteam_testConnection(data.wpUrl, data.wpUsername, data.wpAppPassword);
     }
@@ -127,6 +128,10 @@ export class ZTTeamWordpressService {
       wp_url: data.wpUrl,
       wp_username: data.wpUsername,
     };
+
+    if (data.isManual !== undefined) {
+      updateData.is_manual = data.isManual;
+    }
 
     if (data.wpAppPassword) {
       updateData.wp_app_password_encrypted = this.ztteam_encrypt(data.wpAppPassword);
@@ -138,6 +143,22 @@ export class ZTTeamWordpressService {
     });
   }
 
+  /** ZTTeam: Bật / Tắt nhanh chế độ Đăng Thủ Công cho Website WordPress đích */
+  async ztteam_toggleSiteManual(userId: string, siteId: string, isManual: boolean) {
+    const site = await this.prisma.ztteam_target_sites.findFirst({
+      where: { id: siteId, owner_user_id: userId }
+    });
+
+    if (!site) {
+      throw new HttpException('Website WordPress không tồn tại hoặc bạn không có quyền', HttpStatus.NOT_FOUND);
+    }
+
+    return this.prisma.ztteam_target_sites.update({
+      where: { id: siteId },
+      data: { is_manual: isManual }
+    });
+  }
+
   async ztteam_getTargetSites(userId: string) {
     return this.prisma.ztteam_target_sites.findMany({
       where: { owner_user_id: userId },
@@ -146,6 +167,7 @@ export class ZTTeamWordpressService {
         wp_url: true,
         wp_username: true,
         status: true,
+        is_manual: true,
         created_at: true,
         updated_at: true,
         _count: {

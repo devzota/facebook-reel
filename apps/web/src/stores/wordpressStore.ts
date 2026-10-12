@@ -6,6 +6,7 @@ interface TargetSite {
   wp_url: string;
   wp_username: string;
   status: string;
+  is_manual?: boolean;
   created_at: string;
   _count?: {
     crawl_sources: number;
@@ -17,8 +18,9 @@ interface WordpressState {
   isLoading: boolean;
   error: string | null;
   ztteam_fetchSites: () => Promise<void>;
-  ztteam_createSite: (data: { wpUrl: string; wpUsername: string; wpAppPassword: string }) => Promise<void>;
-  ztteam_updateSite: (id: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string }) => Promise<void>;
+  ztteam_createSite: (data: { wpUrl: string; wpUsername: string; wpAppPassword: string; isManual?: boolean }) => Promise<void>;
+  ztteam_updateSite: (id: string, data: { wpUrl: string; wpUsername: string; wpAppPassword?: string; isManual?: boolean }) => Promise<void>;
+  ztteam_toggleSiteManual: (id: string, isManual: boolean) => Promise<void>;
   ztteam_deleteSite: (id: string) => Promise<void>;
   ztteam_testConnection: (data: { wpUrl: string; wpUsername: string; wpAppPassword?: string }) => Promise<any>;
   ztteam_testPost: (siteId: string, data: { title: string; content: string; excerpt?: string; imageUrl?: string }) => Promise<any>;
@@ -59,6 +61,17 @@ export const useWordpressStore = create<WordpressState>((set, get) => ({
       await get().ztteam_fetchSites();
     } catch (error: any) {
       set({ error: error.response?.data?.message || 'Failed to update site', isLoading: false });
+      throw error;
+    }
+  },
+
+  ztteam_toggleSiteManual: async (id: string, isManual: boolean) => {
+    try {
+      await api.patch(`/wordpress/sites/${id}/toggle-manual`, { isManual });
+      set((state) => ({
+        sites: state.sites.map(s => s.id === id ? { ...s, is_manual: isManual } : s)
+      }));
+    } catch (error: any) {
       throw error;
     }
   },

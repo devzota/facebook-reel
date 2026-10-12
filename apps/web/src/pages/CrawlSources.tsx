@@ -38,6 +38,7 @@ export default function WordPressSites() {
   const [wpUrl, setWpUrl] = useState('');
   const [wpUsername, setWpUsername] = useState('');
   const [wpAppPassword, setWpAppPassword] = useState('');
+  const [isManual, setIsManual] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -133,6 +134,7 @@ export default function WordPressSites() {
     setWpUrl('');
     setWpUsername('');
     setWpAppPassword('');
+    setIsManual(false);
     setTestResult(null);
   };
 
@@ -141,8 +143,18 @@ export default function WordPressSites() {
     setWpUrl(site.wp_url);
     setWpUsername(site.wp_username);
     setWpAppPassword('');
+    setIsManual(site.is_manual || false);
     setShowSiteForm(true);
     setTestResult(null);
+  };
+
+  const ztteam_handleToggleSiteManual = async (siteId: string, currentVal: boolean) => {
+    try {
+      await useWordpressStore.getState().ztteam_toggleSiteManual(siteId, !currentVal);
+      ztteam_showToast(!currentVal ? 'Đã bật Chế độ Đăng Thủ Công cho Website' : 'Đã chuyển Website sang Chế độ Tự Động Fanpage', 'success');
+    } catch {
+      ztteam_showToast('Lỗi cập nhật chế độ website', 'error');
+    }
   };
 
   const ztteam_handleTestConnection = async (e: React.MouseEvent) => {
@@ -172,10 +184,10 @@ export default function WordPressSites() {
     e.preventDefault();
     try {
       if (editingSiteId) {
-        await ztteam_updateSite(editingSiteId, { wpUrl, wpUsername, wpAppPassword: wpAppPassword || undefined });
+        await ztteam_updateSite(editingSiteId, { wpUrl, wpUsername, wpAppPassword: wpAppPassword || undefined, isManual });
         ztteam_showToast('Cập nhật website thành công', 'success');
       } else {
-        await ztteam_createSite({ wpUrl, wpUsername, wpAppPassword });
+        await ztteam_createSite({ wpUrl, wpUsername, wpAppPassword, isManual });
         ztteam_showToast('Thêm website thành công', 'success');
       }
       ztteam_resetSiteForm();
@@ -413,6 +425,32 @@ export default function WordPressSites() {
               </div>
             </div>
 
+            {/** Cấu hình Chế độ Đăng Thủ Công (Manual Studio) */}
+            <div className="p-3.5 rounded-xl bg-fb-surface-hover/70 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-fb-text flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-emerald-400">edit_document</span>
+                  <span>Chế độ Đăng Thủ Công (Manual Studio)</span>
+                </span>
+                <p className="text-[11px] text-fb-text-muted mt-0.5">
+                  Khi bật, 100% bài cào của website này sẽ được đưa thẳng vào Kho Đăng Thủ Công (chuẩn bị sẵn Caption, Ảnh 2K, Link comment), không tự động gán vào Fanpage.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsManual(!isManual)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isManual ? 'bg-emerald-500' : 'bg-black/40 shadow-inner'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    isManual ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
             {testResult && (
               <div className={`p-3.5 rounded-xl flex items-center gap-2 text-xs font-bold ${testResult.success ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                 <span className="material-symbols-outlined text-base">{testResult.success ? 'check_circle' : 'error'}</span>
@@ -473,6 +511,18 @@ export default function WordPressSites() {
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400">
                             {site.status === 'connected' ? 'REST API Connected' : site.status}
                           </span>
+                          <span>•</span>
+                          {site.is_manual ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">edit_document</span>
+                              <span>Đăng Thủ Công</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/15 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">dynamic_feed</span>
+                              <span>Tự Động Fanpage</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -492,6 +542,20 @@ export default function WordPressSites() {
                       )}
 
                       <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => ztteam_handleToggleSiteManual(site.id, !!site.is_manual)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer ${
+                            site.is_manual
+                              ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                              : 'bg-blue-500/15 text-blue-400 hover:bg-blue-500 hover:text-white'
+                          }`}
+                          title={site.is_manual ? 'Đang ở chế độ Đăng Thủ Công (Click để chuyển Tự động)' : 'Đang ở chế độ Tự Động Fanpage (Click để chuyển Thủ công)'}
+                        >
+                          <span className="material-symbols-outlined text-base">
+                            {site.is_manual ? 'edit_document' : 'dynamic_feed'}
+                          </span>
+                        </button>
                         <button onClick={() => ztteam_handleOpenAutoPipeline(site.id)}
                           className="w-8 h-8 flex items-center justify-center text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500 hover:text-white rounded-full transition-colors" title="Cào & Đăng Tự Động (1-Click)">
                           <span className="material-symbols-outlined text-base">bolt</span>

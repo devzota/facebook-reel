@@ -187,6 +187,7 @@ export class ZTTeamImageController {
       countCompleted,
       countPosted,
       countFailed,
+      countManual,
     ] = await Promise.all([
       this.prisma.ztteam_images.findMany({
         where,
@@ -211,6 +212,9 @@ export class ZTTeamImageController {
       }),
       this.prisma.ztteam_images.count({
         where: { ...baseWhere, status: 'FAILED' },
+      }),
+      this.prisma.ztteam_images.count({
+        where: { page_id: null },
       }),
     ]);
 
@@ -344,6 +348,7 @@ export class ZTTeamImageController {
         completed: countCompleted,
         posted: countPosted,
         failed: countFailed,
+        manual: countManual,
       },
     };
   }

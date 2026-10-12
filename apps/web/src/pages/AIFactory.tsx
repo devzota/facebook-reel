@@ -251,6 +251,55 @@ export default function AIFactory() {
         </div>
       </div>
 
+      {/** Hàng Tab Cấp 1: Phân Loại Nguồn Bài (Xuất Bản Fanpage vs Kho Đăng Thủ Công) */}
+      <div className="flex items-center gap-2.5 border-b border-fb-surface-hover/60 pb-3">
+        <button
+          type="button"
+          onClick={() => {
+            setFilterPage('');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            filterPage !== 'MANUAL'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+              : 'text-fb-text-muted hover:text-fb-text hover:bg-fb-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">dynamic_feed</span>
+          <span>⚡ Xuất Bản Fanpage</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              filterPage !== 'MANUAL' ? 'bg-white/20 text-white' : 'bg-fb-surface-hover text-fb-text-muted'
+            }`}
+          >
+            {Math.max(0, (counts.total || 0) - (counts.manual || 0))}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setFilterPage('MANUAL');
+            setCurrentPage(1);
+          }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            filterPage === 'MANUAL'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+              : 'text-fb-text-muted hover:text-fb-text hover:bg-fb-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">edit_document</span>
+          <span>✍️ Kho Đăng Thủ Công</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              filterPage === 'MANUAL' ? 'bg-white/20 text-white' : 'bg-fb-surface-hover text-emerald-400'
+            }`}
+          >
+            {counts.manual || 0}
+          </span>
+        </button>
+      </div>
+
       {/** Tabs Trạng Thái Chuẩn UI Guidelines (Dùng shadow, không border nổi bật, không màu hồng/tím) */}
       <div className="bg-fb-surface rounded-2xl p-2 shadow-lg">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar">
@@ -313,25 +362,26 @@ export default function AIFactory() {
             )}
           </div>
 
-          {/** Dropdown Chọn Fanpage */}
-          <div className="flex items-center gap-2 min-w-[200px]">
-            <CustomDropdown
-              value={filterPage}
-              onChange={(val) => {
-                setFilterPage(val);
-                setCurrentPage(1);
-              }}
-              options={[
-                { value: '', label: 'Tất cả nguồn bài' },
-                { value: 'MANUAL', label: '✍️ Kho Đăng Thủ Công (Độc lập)' },
-                ...pages.map((p: any) => ({
-                  value: p.id,
-                  label: ztteam_decodeHtmlEntity(p.name),
-                })),
-              ]}
-              className="w-full"
-            />
-          </div>
+          {/** Dropdown Chọn Fanpage (Chỉ hiển thị khi đang ở Tab Xuất Bản Fanpage) */}
+          {filterPage !== 'MANUAL' && (
+            <div className="flex items-center gap-2 min-w-[200px]">
+              <CustomDropdown
+                value={filterPage}
+                onChange={(val) => {
+                  setFilterPage(val);
+                  setCurrentPage(1);
+                }}
+                options={[
+                  { value: '', label: 'Tất cả Fanpage' },
+                  ...pages.map((p: any) => ({
+                    value: p.id,
+                    label: ztteam_decodeHtmlEntity(p.name),
+                  })),
+                ]}
+                className="w-full"
+              />
+            </div>
+          )}
 
           {/** Chọn Số Bài Mỗi Trang */}
           <div className="flex items-center gap-2 min-w-[130px]">
