@@ -539,13 +539,13 @@ export default function GoogleAnalyticsPage() {
                             <button
                               type="button"
                               onClick={() => ztteam_handleUpdateSite(siteItem.id, 'active', !siteItem.active)}
-                              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                                siteItem.active ? 'bg-emerald-500' : 'bg-black/30 shadow-inner'
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer ${
+                                siteItem.active ? 'bg-fb-blue' : 'bg-slate-700'
                               }`}
                             >
                               <span
-                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                                  siteItem.active ? 'translate-x-4' : 'translate-x-0.5'
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                  siteItem.active ? 'translate-x-5' : 'translate-x-1'
                                 }`}
                               />
                             </button>

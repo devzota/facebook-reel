@@ -77,7 +77,7 @@ export default function ZTTeamRealtimeWidget() {
             className="fixed inset-0 z-40"
             onClick={() => setShowPopover(false)}
           />
-          <div className="absolute right-0 mt-2.5 w-[360px] sm:w-[460px] bg-fb-surface rounded-2xl shadow-2xl p-5 z-50 text-left space-y-4 animate-in fade-in duration-200">
+          <div className="absolute right-0 mt-2.5 w-[360px] sm:w-[480px] md:w-[500px] bg-fb-surface rounded-2xl shadow-2xl p-5 z-50 text-left space-y-4 animate-in fade-in duration-200">
             {/** Header Popover */}
             <div className="flex items-center justify-between pb-1">
               <div className="flex items-center gap-2.5">
