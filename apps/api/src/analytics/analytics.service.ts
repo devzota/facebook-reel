@@ -8,6 +8,7 @@ export class ZTTeamAnalyticsService {
   private analyticsClient: BetaAnalyticsDataClient | null = null;
   private clientInitialized = false;
   private ztteam_realtimeCache = new Map<string, { data: any; timestamp: number }>();
+  private ztteam_standardReportCache = new Map<string, { data: any; timestamp: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -401,6 +402,105 @@ export class ZTTeamAnalyticsService {
   }
 
   /**
+   * ZTTeam: Lấy Báo Cáo Chuẩn 7 Ngày (Lượt xem, Người dùng, Thời gian phiên, Tỷ lệ thoát, Biểu đồ ngày)
+   * Sử dụng runReport của GA4 Data API, áp dụng cache 30 phút để bảo vệ hạn mức Quota.
+   * TUYỆT ĐỐI không fallback số liệu giả: nếu chưa có dữ liệu thì trả về 0.
+   */
+  async ztteam_getStandardStats(propId: string) {
+    const cacheKey = `standard_stats_${propId}`;
+    const now = Date.now();
+    const cached = this.ztteam_standardReportCache.get(cacheKey);
+
+    /** Cache 30 phút */
+    if (cached && (now - cached.timestamp < 30 * 60 * 1000)) {
+      return cached.data;
+    }
+
+    const client = await this.ztteam_getClient();
+    if (!client) {
+      return {
+        totalUsers: 0,
+        pageViews: 0,
+        avgSessionDurationStr: '0s',
+        bounceRateStr: '0%',
+        chartData: [],
+      };
+    }
+
+    try {
+      /** 1. Lấy metrics tổng quan 7 ngày */
+      const [overviewReport] = await client.runReport({
+        property: `properties/${propId}`,
+        dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+        metrics: [
+          { name: 'totalUsers' },
+          { name: 'screenPageViews' },
+          { name: 'averageSessionDuration' },
+          { name: 'bounceRate' },
+        ],
+      });
+
+      const row = overviewReport.rows?.[0];
+      const totalUsers = parseInt(row?.metricValues?.[0]?.value || '0', 10);
+      const pageViews = parseInt(row?.metricValues?.[1]?.value || '0', 10);
+      const avgSec = parseFloat(row?.metricValues?.[2]?.value || '0');
+      const bounce = parseFloat(row?.metricValues?.[3]?.value || '0') * 100;
+
+      const avgMinutes = Math.floor(avgSec / 60);
+      const avgSeconds = Math.round(avgSec % 60);
+      const avgSessionDurationStr = avgMinutes > 0 ? `${avgMinutes}m ${avgSeconds}s` : `${avgSeconds}s`;
+      const bounceRateStr = `${bounce.toFixed(1)}%`;
+
+      /** 2. Lấy biểu đồ 7 ngày theo dimension date */
+      const [dailyReport] = await client.runReport({
+        property: `properties/${propId}`,
+        dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+        dimensions: [{ name: 'date' }],
+        metrics: [
+          { name: 'totalUsers' },
+          { name: 'screenPageViews' },
+        ],
+        orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
+      });
+
+      const chartData = (dailyReport.rows || []).map((r) => {
+        const rawDate = r.dimensionValues?.[0]?.value || '';
+        let dateLabel = rawDate;
+        if (rawDate.length === 8) {
+          const month = parseInt(rawDate.substring(4, 6), 10);
+          const day = parseInt(rawDate.substring(6, 8), 10);
+          dateLabel = `${day} Thg ${month}`;
+        }
+        return {
+          date: dateLabel,
+          users: parseInt(r.metricValues?.[0]?.value || '0', 10),
+          views: parseInt(r.metricValues?.[1]?.value || '0', 10),
+        };
+      });
+
+      const standardData = {
+        totalUsers,
+        pageViews,
+        avgSessionDurationStr,
+        bounceRateStr,
+        chartData,
+      };
+
+      this.ztteam_standardReportCache.set(cacheKey, { data: standardData, timestamp: now });
+      return standardData;
+    } catch (err: any) {
+      this.logger.warn(`Lấy runReport thất bại cho #${propId}: ${err.message}`);
+      return {
+        totalUsers: 0,
+        pageViews: 0,
+        avgSessionDurationStr: '0s',
+        bounceRateStr: '0%',
+        chartData: [],
+      };
+    }
+  }
+
+  /**
    * ZTTeam: Lấy dữ liệu Realtime đồng thời cho tất cả các website được giám sát (Multi-site)
    * Tích hợp In-Memory Cache 35s để chống cạn kiệt Token Quota của Google Cloud
    */
@@ -509,6 +609,9 @@ export class ZTTeamAnalyticsService {
           this.logger.warn(`Lỗi lấy topCountries cho ${site.domain} (#${propId}): ${err.message}`);
         }
 
+        /** Lấy Báo Cáo Chuẩn 7 Ngày (Lượt xem, Người dùng, Thời gian phiên, Tỷ lệ thoát, Biểu đồ ngày) thật 100% từ GA4 */
+        const standardStats = await this.ztteam_getStandardStats(propId);
+
         const siteData = {
           id: site.id,
           name: site.name,
@@ -517,6 +620,11 @@ export class ZTTeamAnalyticsService {
           activeUsers,
           topArticles,
           topCountries,
+          totalUsers: standardStats.totalUsers,
+          pageViews: standardStats.pageViews,
+          avgSessionDurationStr: standardStats.avgSessionDurationStr,
+          bounceRateStr: standardStats.bounceRateStr,
+          chartData: standardStats.chartData,
           ga4Url: `https://analytics.google.com/analytics/web/#/p${propId}/realtime/overview`,
         };
 

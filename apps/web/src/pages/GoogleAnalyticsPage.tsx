@@ -27,6 +27,11 @@ interface ZTTeamSiteRealtimeData {
   activeUsers: number;
   topArticles: Array<{ title: string; activeUsers: number }>;
   topCountries: Array<{ country: string; activeUsers: number }>;
+  totalUsers?: number;
+  pageViews?: number;
+  avgSessionDurationStr?: string;
+  bounceRateStr?: string;
+  chartData?: Array<{ date: string; users: number; views: number }>;
   ga4Url: string;
   error?: string;
 }
@@ -36,7 +41,7 @@ interface ZTTeamSiteRealtimeData {
  */
 function ZTTeamMiniSparkline({ strokeColor = '#38bdf8' }: { strokeColor?: string }) {
   return (
-    <div className="w-14 sm:w-16 h-6 sm:h-7 shrink-0 overflow-hidden">
+    <div className="w-12 h-5 shrink-0 overflow-hidden">
       <svg viewBox="0 0 70 28" className="w-full h-full overflow-visible">
         <path
           d="M 2 20 Q 18 5, 34 18 T 68 8"
@@ -51,11 +56,13 @@ function ZTTeamMiniSparkline({ strokeColor = '#38bdf8' }: { strokeColor?: string
 }
 
 /**
- * ZTTeam: Hàng 4 Thẻ Chỉ Số Đo Lường Của Từng Site (Chuẩn Hình 2)
+ * ZTTeam: Hàng 4 Thẻ Chỉ Số Đo Lường Của Từng Site (Chuẩn Hình 2) - Dùng 100% số liệu thật từ GA4
  */
 function ZTTeamSiteMetricCards({ site }: { site: ZTTeamSiteRealtimeData }) {
-  const baseUsers = Math.max(12, site.activeUsers * 48);
-  const baseViews = Math.round(baseUsers * 3.2);
+  const users = site.totalUsers ?? 0;
+  const views = site.pageViews ?? 0;
+  const avgDuration = site.avgSessionDurationStr || '0s';
+  const bounce = site.bounceRateStr || '0%';
 
   const formatK = (num: number) => {
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -63,90 +70,66 @@ function ZTTeamSiteMetricCards({ site }: { site: ZTTeamSiteRealtimeData }) {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+    <div className="grid grid-cols-2 gap-2">
       {/** Thẻ 1: Người dùng */}
-      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-sm">group</span>
+      <div className="p-2.5 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-6 h-6 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-xs">group</span>
           </div>
-          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Người dùng</span>
+          <span className="text-[10px] font-semibold text-fb-text-muted truncate">Người dùng (7d)</span>
         </div>
         <div className="flex items-end justify-between gap-1">
-          <div>
-            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
-              {formatK(baseUsers)}
-            </div>
-            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
-              <span>↑</span>
-              <span>12.5%</span>
-            </div>
+          <div className="text-sm sm:text-base font-black font-mono text-fb-text">
+            {formatK(users)}
           </div>
           <ZTTeamMiniSparkline strokeColor="#38bdf8" />
         </div>
       </div>
 
       {/** Thẻ 2: Lượt xem */}
-      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-sm">visibility</span>
+      <div className="p-2.5 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-6 h-6 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-xs">visibility</span>
           </div>
-          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Lượt xem</span>
+          <span className="text-[10px] font-semibold text-fb-text-muted truncate">Lượt xem (7d)</span>
         </div>
         <div className="flex items-end justify-between gap-1">
-          <div>
-            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
-              {formatK(baseViews)}
-            </div>
-            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
-              <span>↑</span>
-              <span>8.2%</span>
-            </div>
+          <div className="text-sm sm:text-base font-black font-mono text-fb-text">
+            {formatK(views)}
           </div>
           <ZTTeamMiniSparkline strokeColor="#2563eb" />
         </div>
       </div>
 
       {/** Thẻ 3: Thời gian phiên */}
-      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-sm">timer</span>
+      <div className="p-2.5 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-6 h-6 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-xs">timer</span>
           </div>
-          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Thời gian phiên</span>
+          <span className="text-[10px] font-semibold text-fb-text-muted truncate">Thời gian phiên</span>
         </div>
         <div className="flex items-end justify-between gap-1">
-          <div>
-            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
-              2m 15s
-            </div>
-            <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 mt-0.5">
-              <span>↑</span>
-              <span>6.1%</span>
-            </div>
+          <div className="text-sm sm:text-base font-black font-mono text-fb-text">
+            {avgDuration}
           </div>
           <ZTTeamMiniSparkline strokeColor="#14b8a6" />
         </div>
       </div>
 
       {/** Thẻ 4: Tỷ lệ thoát */}
-      <div className="p-3 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-sm">trending_up</span>
+      <div className="p-2.5 rounded-2xl bg-fb-surface-hover/30 hover:bg-fb-surface-hover/50 transition-all flex flex-col justify-between">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-xs">trending_up</span>
           </div>
-          <span className="text-[11px] font-semibold text-fb-text-muted truncate">Tỷ lệ thoát</span>
+          <span className="text-[10px] font-semibold text-fb-text-muted truncate">Tỷ lệ thoát</span>
         </div>
         <div className="flex items-end justify-between gap-1">
-          <div>
-            <div className="text-base sm:text-lg font-black font-mono text-fb-text">
-              64.8%
-            </div>
-            <div className="text-[10px] font-bold text-amber-400 flex items-center gap-0.5 mt-0.5">
-              <span>↑</span>
-              <span>2.1%</span>
-            </div>
+          <div className="text-sm sm:text-base font-black font-mono text-fb-text">
+            {bounce}
           </div>
           <ZTTeamMiniSparkline strokeColor="#f59e0b" />
         </div>
@@ -156,57 +139,45 @@ function ZTTeamSiteMetricCards({ site }: { site: ZTTeamSiteRealtimeData }) {
 }
 
 /**
- * ZTTeam: Biểu Đồ 2 Tầng Lượt Truy Cập Chuẩn Hình 1 Cho Từng Site
+ * ZTTeam: Biểu Đồ 2 Tầng Lượt Truy Cập Chuẩn Hình 1 Cho Từng Site (Dùng chartData thật từ GA4)
  */
-function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; activeUsers: number }) {
-  const chartData = React.useMemo(() => {
-    const days: any[] = [];
-    const now = new Date();
-    const multipliers = [0.45, 0.78, 0.52, 0.95, 0.88, 0.62, 1.0];
-    const baseVal = Math.max(25, activeUsers * 80);
-
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = `${d.getDate()} Thg ${d.getMonth() + 1}`;
-      const mult = multipliers[6 - i];
-      const users = Math.round(baseVal * mult);
-      const views = Math.round(users * 2.4);
-      days.push({
-        date: dateStr,
-        users,
-        views,
-      });
-    }
-    return days;
-  }, [siteId, activeUsers]);
+function ZTTeamSiteAccessChart({ siteId, chartData = [] }: { siteId: string; chartData?: Array<{ date: string; users: number; views: number }> }) {
+  const data = chartData && chartData.length > 0 ? chartData : [
+    { date: 'T-6', users: 0, views: 0 },
+    { date: 'T-5', users: 0, views: 0 },
+    { date: 'T-4', users: 0, views: 0 },
+    { date: 'T-3', users: 0, views: 0 },
+    { date: 'T-2', users: 0, views: 0 },
+    { date: 'T-1', users: 0, views: 0 },
+    { date: 'Hôm nay', users: 0, views: 0 },
+  ];
 
   const gradUsersId = `gradUsers_${siteId}`;
   const gradViewsId = `gradViews_${siteId}`;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/** Header biểu đồ: Tiêu đề "Lượt truy cập" + Legend 2 chấm tròn */}
       <div className="flex items-center justify-between px-1">
-        <h4 className="text-xs sm:text-sm font-black text-fb-text">
+        <h4 className="text-xs font-black text-fb-text">
           Lượt truy cập
         </h4>
-        <div className="flex items-center gap-4 text-xs font-bold">
+        <div className="flex items-center gap-3 text-[11px] font-bold">
           <span className="flex items-center gap-1.5 text-sky-400">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            <span className="w-2 h-2 rounded-full bg-sky-400"></span>
             <span>Người dùng</span>
           </span>
           <span className="flex items-center gap-1.5 text-blue-500">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
             <span>Lượt xem</span>
           </span>
         </div>
       </div>
 
       {/** Khung biểu đồ Recharts Area Spline 2 tầng */}
-      <div className="h-44 sm:h-52 w-full">
+      <div className="h-40 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id={gradViewsId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#2563eb" stopOpacity={0.65} />
@@ -221,13 +192,13 @@ function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; active
             <XAxis
               dataKey="date"
               stroke="#64748b"
-              tick={{ fontSize: 10, fill: '#94a3b8' }}
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
               tickLine={false}
               axisLine={{ stroke: '#334155', opacity: 0.3 }}
             />
             <YAxis
               stroke="#64748b"
-              tick={{ fontSize: 10, fill: '#94a3b8' }}
+              tick={{ fontSize: 9, fill: '#94a3b8' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v)}
@@ -236,7 +207,7 @@ function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; active
               contentStyle={{
                 backgroundColor: 'rgba(15, 23, 42, 0.92)',
                 borderColor: 'rgba(51, 65, 85, 0.6)',
-                borderRadius: '1rem',
+                borderRadius: '0.75rem',
                 color: '#fff',
                 fontSize: '11px',
                 fontWeight: 'bold',
@@ -246,13 +217,13 @@ function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; active
                 Number(val).toLocaleString(),
                 name === 'views' ? 'Lượt xem' : 'Người dùng',
               ]}
-              labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+              labelStyle={{ color: '#94a3b8', marginBottom: '2px' }}
             />
             <Area
               type="monotone"
               dataKey="views"
               stroke="#3b82f6"
-              strokeWidth={2.5}
+              strokeWidth={2}
               fillOpacity={1}
               fill={`url(#${gradViewsId})`}
             />
@@ -260,79 +231,13 @@ function ZTTeamSiteAccessChart({ siteId, activeUsers }: { siteId: string; active
               type="monotone"
               dataKey="users"
               stroke="#38bdf8"
-              strokeWidth={2.5}
+              strokeWidth={2}
               fillOpacity={1}
               fill={`url(#${gradUsersId})`}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </div>
-  );
-}
-
-/**
- * ZTTeam: Component Biểu Đồ Sóng Realtime Sparkline Gradient
- * Tạo đường cong sóng mượt mà dạng SVG thể hiện nhịp biến thiên người online
- */
-function ZTTeamRealtimeSparkline({ value }: { value: number }) {
-  const points = React.useMemo(() => {
-    if (!value || value <= 0) {
-      return [
-        { x: 0, y: 38 },
-        { x: 50, y: 38 },
-        { x: 100, y: 38 },
-        { x: 150, y: 38 },
-        { x: 200, y: 38 },
-        { x: 250, y: 38 },
-        { x: 300, y: 38 },
-      ];
-    }
-
-    const baseHeight = 35;
-    const offsets = [-0.15, 0.25, -0.1, 0.35, 0.05, 0.45, 0.2];
-    return offsets.map((offset, idx) => {
-      const x = idx * 50;
-      const wave = Math.sin(idx * 1.3) * 8 + offset * 12;
-      const y = Math.max(8, Math.min(42, baseHeight - wave));
-      return { x, y };
-    });
-  }, [value]);
-
-  const pathD = React.useMemo(() => {
-    return points.reduce((acc, pt, idx, arr) => {
-      if (idx === 0) return `M ${pt.x} ${pt.y}`;
-      const prev = arr[idx - 1];
-      const cx = (prev.x + pt.x) / 2;
-      return `${acc} C ${cx} ${prev.y}, ${cx} ${pt.y}, ${pt.x} ${pt.y}`;
-    }, '');
-  }, [points]);
-
-  const areaD = `${pathD} L 300 50 L 0 50 Z`;
-
-  return (
-    <div className="w-full h-12 overflow-hidden relative">
-      <svg
-        viewBox="0 0 300 50"
-        preserveAspectRatio="none"
-        className="w-full h-full overflow-visible"
-      >
-        <defs>
-          <linearGradient id={`ztteam-spark-${value}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-        <path d={areaD} fill={`url(#ztteam-spark-${value})`} />
-        <path
-          d={pathD}
-          fill="none"
-          stroke="#34d399"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
     </div>
   );
 }
@@ -613,17 +518,17 @@ export default function GoogleAnalyticsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {realtimeData.sites.map((site) => (
             <div
               key={site.id}
-              className="bg-fb-surface rounded-3xl shadow-xl hover:shadow-2xl p-6 flex flex-col justify-between transition-all space-y-6"
+              className="bg-fb-surface rounded-3xl shadow-xl hover:shadow-2xl p-5 flex flex-col justify-between transition-all space-y-5"
             >
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {/** 1. CỤM SỐ ONLINE CENTER TO & CHỮ ĐANG ONLINE NHỎ DƯỚI */}
                 <div className="text-center pt-1 pb-1">
                   <div className="relative inline-flex items-center justify-center">
-                    <span className="text-5xl sm:text-6xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
+                    <span className="text-5xl font-black text-emerald-400 font-mono tracking-tight drop-shadow-sm">
                       {site.activeUsers}
                     </span>
                     {site.activeUsers > 0 && (
@@ -638,12 +543,12 @@ export default function GoogleAnalyticsPage() {
                   </div>
                 </div>
 
-                {/** 2. BIỂU ĐỒ 2 TẦNG "LƯỢT TRUY CẬP" (CHUẨN HÌNH 1) */}
-                <div className="bg-fb-surface-hover/20 p-4 rounded-2xl">
-                  <ZTTeamSiteAccessChart siteId={site.id} activeUsers={site.activeUsers} />
+                {/** 2. BIỂU ĐỒ 2 TẦNG "LƯỢT TRUY CẬP" (CHUẨN HÌNH 1 - DÙNG SỐ LIỆU THẬT GA4) */}
+                <div className="bg-fb-surface-hover/20 p-3.5 rounded-2xl">
+                  <ZTTeamSiteAccessChart siteId={site.id} chartData={site.chartData} />
                 </div>
 
-                {/** 3. HÀNG 4 THẺ CHỈ SỐ ĐO LƯỜNG (CHUẨN HÌNH 2) */}
+                {/** 3. HÀNG 4 THẺ CHỈ SỐ ĐO LƯỜNG (CHUẨN HÌNH 2 - DÙNG SỐ LIỆU THẬT GA4) */}
                 <ZTTeamSiteMetricCards site={site} />
 
                 {/** 4. NỘI DUNG REALTIME: TOP QUỐC GIA & TOP BÀI VIẾT (2 CỘT GỌN GÀNG) */}
