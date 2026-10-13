@@ -133,11 +133,22 @@ async function ztteam_processVideoJobOnMuse(job, target) {
 
       console.log(`🔍 Trạng thái ban đầu trên Muse: ${initialStats.count} video | ${initialStats.downloadBtns} nút tải | ${initialStats.proseCount} tin nhắn trợ lý`);
 
-      /** 2. Upload ảnh đính kèm */
+      /** 2. Upload ảnh đính kèm vào khung chat */
       console.log(`📤 Đang đính kèm ảnh vào khung chat Muse.ai...`);
-      const fileInput = await page.$('input[type="file"]');
-      if (!fileInput) throw new Error('Không tìm thấy input[type="file"] trên Muse.ai');
-      await fileInput.uploadFile(localImagePath);
+      /** Dọn sạch ảnh preview cũ nếu còn sót lại từ lần trước */
+      await page.evaluate(() => {
+        const removeBtn = Array.from(document.querySelectorAll('button')).find(btn => {
+          return btn.closest('div')?.querySelector('img[src^="blob:"]') !== null;
+        });
+        if (removeBtn) removeBtn.click();
+      });
+      await new Promise(r => setTimeout(r, 500));
+
+      /** Chọn đúng thẻ input file của khung chat (thẻ thứ 2, tránh thẻ background ẩn) */
+      const fileInputs = await page.$$('input[type="file"]');
+      if (!fileInputs || fileInputs.length === 0) throw new Error('Không tìm thấy input[type="file"] trên Muse.ai');
+      const chatFileInput = fileInputs.length > 1 ? fileInputs[fileInputs.length - 1] : fileInputs[0];
+      await chatFileInput.uploadFile(localImagePath);
       await new Promise(r => setTimeout(r, 3000));
 
       /** 3. Dán prompt duy nhất 1 lần và bấm gửi */
@@ -285,9 +296,16 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       fs.writeFileSync(localVideoPath, buffer);
       console.log(`✅ Đã lưu file video MP4 hoàn chỉnh: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     } catch (innerErr) {
-      /** Nếu gặp lỗi render/timeout/từ chối, reload lại tab hiện tại để dọn sạch ảnh kẹt */
+      /** Nếu gặp lỗi render/timeout/từ chối, dọn dẹp nhanh ảnh kẹt (nếu có) */
       try {
-        if (page) await page.reload({ waitUntil: 'domcontentloaded' });
+        if (page) {
+          await page.evaluate(() => {
+            const removeBtn = Array.from(document.querySelectorAll('button')).find(btn => {
+              return btn.closest('div')?.querySelector('img[src^="blob:"]') !== null;
+            });
+            if (removeBtn) removeBtn.click();
+          });
+        }
       } catch (rErr) {}
       throw innerErr;
     } finally {
