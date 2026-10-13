@@ -85,49 +85,19 @@ async function ztteam_isChromeRunning() {
   }
 }
 
-/** Hàm dọn dẹp trực tiếp các phần tử trong khung chat Muse.ai */
-async function ztteam_cleanComposerDOM(page) {
+/** Hàm dọn sạch khung soạn thảo textarea bằng phím (không reload, không chuyển tab) */
+async function ztteam_cleanComposer(page) {
   if (!page) return;
   try {
     await page.evaluate(() => {
-      /** 1. Reset giá trị textarea */
       const ta = document.querySelector('textarea');
-      if (ta) {
-        ta.value = '';
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-        ta.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      /** 2. Click tất cả các nút Xóa / Hủy preview ảnh đính kèm nếu có */
-      const removeBtns = document.querySelectorAll(
-        'button[aria-label*="xóa" i], button[aria-label*="remove" i], button[aria-label*="delete" i], button[aria-label*="hủy" i], div[class*="preview"] button, div[class*="attachment"] button'
-      );
-      removeBtns.forEach(b => b.click());
-
-      /** 3. Reset input file */
-      const fileInputs = document.querySelectorAll('input[type="file"]');
-      fileInputs.forEach(i => { i.value = ''; });
+      if (ta) ta.focus();
     });
+    await page.keyboard.down('Control');
+    await page.keyboard.press('A');
+    await page.keyboard.up('Control');
+    await page.keyboard.press('Backspace');
   } catch (e) {}
-}
-
-/** Hàm dọn dẹp và reset giao diện Muse.ai về trạng thái trắng sạch (2 tầng: DOM + Reload) */
-async function ztteam_resetMusePage(page) {
-  if (!page) return;
-  try {
-    ztteam_log('🧹 Đang làm mới tab Muse.ai để đảm bảo khung chat sạch 100%...');
-    /** Tầng 1: Xóa nhanh trên DOM */
-    await ztteam_cleanComposerDOM(page);
-
-    /** Tầng 2: Reload trang về URL gốc để reset toàn bộ React state */
-    await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForSelector('textarea', { timeout: 20000 });
-    await new Promise(r => setTimeout(r, 2000));
-
-    /** Tầng 3: Kiểm tra làm sạch lần cuối */
-    await ztteam_cleanComposerDOM(page);
-  } catch (err) {
-    ztteam_log(`⚠️ Không thể reload tab Muse: ${err.message}`);
-  }
 }
 
 /** Hàm thực thi render 1 video trên Muse.ai */
@@ -146,8 +116,8 @@ async function ztteam_processVideoJobOnMuse(job, target) {
     let videoRendered = false;
     let base64Data = null;
 
-    /** 1. Kết nối Chrome với protocolTimeout 10 phút (chống triệt để Runtime.callFunctionOn timed out) */
-    ztteam_log(`🌐 [1/4] Đang kết nối tới Chrome (${CHROME_DEBUG_URL}) với timeout 10 phút...`);
+    /** 1. Kết nối Chrome với protocolTimeout 10 phút */
+    ztteam_log(`🌐 [1/4] Đang kết nối tới Chrome (${CHROME_DEBUG_URL})...`);
     browser = await puppeteer.connect({
       browserURL: CHROME_DEBUG_URL,
       defaultViewport: null,
@@ -155,34 +125,19 @@ async function ztteam_processVideoJobOnMuse(job, target) {
     });
 
     const pages = await browser.pages();
-    let page = pages.find(p => p.url().includes('muse.ai'));
+    let page = pages.find(p => p.url().includes('muse.ai')) || pages[0];
     if (!page) {
-      ztteam_log('ℹ️ Mở tab Muse.ai mới...');
-      page = await browser.newPage();
-      await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded' });
+      throw new Error('Không tìm thấy tab Muse.ai trong trình duyệt');
     }
     await page.bringToFront();
 
     /** Chờ khung nhập liệu sẵn sàng */
     await page.waitForSelector('textarea', { timeout: 20000 });
-    await new Promise(r => setTimeout(r, 1500));
 
-    /** 1.1 Kiểm tra xem khung chat có đang dính ảnh hoặc text cũ từ lần trước không */
-    const isDirty = await page.evaluate(() => {
-      const ta = document.querySelector('textarea');
-      const hasText = ta && ta.value && ta.value.trim().length > 0;
-      /** Tìm xem có thumbnail ảnh preview nào đang gắn trong composer không */
-      const previewImgs = document.querySelectorAll('div[class*="preview"] img, div[class*="attachment"] img, form img');
-      const removeBtns = document.querySelectorAll('button[aria-label*="xóa" i], button[aria-label*="remove" i], button[aria-label*="delete" i]');
-      return hasText || previewImgs.length > 0 || removeBtns.length > 0;
-    });
+    /** Dọn sạch bất kỳ chữ thừa nào trong ô nhập liệu trước khi làm việc */
+    await ztteam_cleanComposer(page);
 
-    if (isDirty) {
-      ztteam_log('⚠️ Phát hiện ảnh hoặc nội dung kẹt lại trong khung chat. Đang làm mới tab...');
-      await ztteam_resetMusePage(page);
-    }
-
-    /** 1.2 Tải ảnh hiện tại của job từ VPS về máy tính */
+    /** 2. Tải ảnh của bài viết từ VPS về đĩa tạm */
     if (fs.existsSync(localImagePath)) {
       try { fs.unlinkSync(localImagePath); } catch (e) {}
     }
@@ -209,91 +164,39 @@ async function ztteam_processVideoJobOnMuse(job, target) {
 
     ztteam_log(`🔍 Trạng thái ban đầu trên Muse: ${initialStats.count} video | ${initialStats.downloadBtns} nút tải | ${initialStats.proseCount} tin nhắn trợ lý`);
 
-    /** 2. Upload ảnh đính kèm */
+    /** 3. Upload ảnh đính kèm vào khung chat */
     ztteam_log(`📤 Đang đính kèm ảnh vào khung chat Muse.ai...`);
     const fileInput = await page.$('input[type="file"]');
     if (!fileInput) throw new Error('Không tìm thấy input[type="file"] trên Muse.ai');
     await fileInput.uploadFile(localImagePath);
-    await new Promise(r => setTimeout(r, 3500));
+    await new Promise(r => setTimeout(r, 2500));
 
-    /** 3. Dán prompt duy nhất 1 lần vào textarea */
-    ztteam_log(`✍️ Đang dán câu lệnh & nội dung câu chuyện...`);
-    const textarea = await page.$('textarea');
-    if (!textarea) throw new Error('Không tìm thấy ô textarea để nhập prompt');
-    await textarea.click();
-
-    /** Dán toàn bộ nội dung nguyên vẹn vào textarea và kích hoạt event input */
-    await page.evaluate((fullPrompt) => {
+    /** 4. Focus ô textarea và gõ prompt chuẩn xác */
+    ztteam_log(`✍️ Đang nhập câu lệnh mô tả video...`);
+    await page.evaluate(() => {
       const ta = document.querySelector('textarea');
-      if (!ta) return;
-      ta.focus();
-      ta.value = '';
-      document.execCommand('insertText', false, fullPrompt);
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      ta.dispatchEvent(new Event('change', { bubbles: true }));
-    }, job.prompt);
-    await new Promise(r => setTimeout(r, 1500));
+      if (ta) ta.focus();
+    });
+    await page.keyboard.type(job.prompt, { delay: 1 });
+    await new Promise(r => setTimeout(r, 1000));
 
-    /** 3.1 Bấm gửi tin nhắn và XÁC NHẬN TIN NHẮN ĐÃ GỬI THÀNH CÔNG */
-    ztteam_log(`🚀 Đang chờ nút Gửi sẵn sàng và bấm gửi tin nhắn...`);
-    let messageSent = false;
-    const sendWaitStart = Date.now();
-
-    while (Date.now() - sendWaitStart < 25000) {
-      const sendResult = await page.evaluate(() => {
-        /** Tìm kiếm nút gửi thông minh đa ngôn ngữ */
-        const allButtons = Array.from(document.querySelectorAll('button'));
-        const sendBtn = allButtons.find(b => {
-          const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-          const title = (b.getAttribute('title') || '').toLowerCase();
-          const text = (b.innerText || '').toLowerCase();
-          const isSend = aria.includes('gửi') || aria.includes('send') || title.includes('gửi') || title.includes('send') || text.includes('gửi') || text.includes('send') || b.type === 'submit';
-          const isNotAttach = !aria.includes('đính kèm') && !aria.includes('attach') && !aria.includes('tải lên') && !aria.includes('upload');
-          return isSend && isNotAttach;
-        }) || document.querySelector('button[type="submit"]:not([aria-label*="Đính kèm"])');
-
-        if (sendBtn && !sendBtn.disabled) {
-          sendBtn.click();
-          return { clicked: true, disabled: false };
-        }
-        return { clicked: false, disabled: sendBtn ? sendBtn.disabled : true };
-      });
-
-      if (sendResult.clicked) {
-        await new Promise(r => setTimeout(r, 1500));
-        const isCleared = await page.evaluate(() => {
-          const ta = document.querySelector('textarea');
-          return !ta || ta.value.trim().length === 0;
-        });
-        if (isCleared) {
-          messageSent = true;
-          break;
-        }
+    /** 5. Bấm nút Gửi tin nhắn */
+    ztteam_log(`🚀 Đang bấm gửi yêu cầu tạo video...`);
+    const sentViaButton = await page.evaluate(() => {
+      const sendBtn = document.querySelector('button[aria-label="Gửi"]');
+      if (sendBtn && !sendBtn.disabled) {
+        sendBtn.click();
+        return true;
       }
+      return false;
+    });
 
-      /** Focus textarea và thử phím Enter */
-      await textarea.click();
+    if (!sentViaButton) {
       await page.keyboard.press('Enter');
-      await new Promise(r => setTimeout(r, 1200));
-
-      const checkAfterEnter = await page.evaluate(() => {
-        const ta = document.querySelector('textarea');
-        return !ta || ta.value.trim().length === 0;
-      });
-      if (checkAfterEnter) {
-        messageSent = true;
-        break;
-      }
-
-      await new Promise(r => setTimeout(r, 1500));
     }
+    ztteam_log(`✅ Đã bấm gửi thành công!`);
 
-    if (!messageSent) {
-      throw new Error('Không thể gửi tin nhắn lên Muse.ai (Nút Gửi bị vô hiệu hóa hoặc ảnh chưa hoàn tất tải lên)');
-    }
-    ztteam_log(`✅ Đã gửi thành công tin nhắn và ảnh lên Muse.ai!`);
-
-    /** 4. Chờ Muse.ai render xong video 15s */
+    /** 6. Chờ Muse.ai render xong video 15s */
     const timeoutMs = 420000; /** 7 phút tối đa */
     ztteam_log(`⏳ [2/4] Đang chờ Muse.ai render video mới (tối đa 7 phút)...`);
     const startTime = Date.now();
@@ -376,7 +279,7 @@ async function ztteam_processVideoJobOnMuse(job, target) {
     /** Chờ 3s để stream buffer ổn định */
     await new Promise(r => setTimeout(r, 3000));
 
-    /** 5. Trích xuất dữ liệu video blob mới */
+    /** 7. Trích xuất dữ liệu video blob mới */
     ztteam_log(`💾 [3/4] Đang trích xuất dữ liệu video MP4 mới...`);
     base64Data = await page.evaluate(async (initialSrcs) => {
       const contentVideos = Array.from(document.querySelectorAll('video')).filter(v => {
@@ -410,7 +313,7 @@ async function ztteam_processVideoJobOnMuse(job, target) {
     fs.writeFileSync(localVideoPath, buffer);
     ztteam_log(`✅ Đã lưu file video MP4 hoàn chỉnh: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
 
-    /** 6. Upload video MP4 lên đúng hệ thống VPS */
+    /** 8. Upload video MP4 lên đúng hệ thống VPS */
     ztteam_log(`📤 [4/4] Đang tải video lên ${target.name} (${target.url}/api/image/${job.id}/attach-video)...`);
     const formData = new FormData();
     formData.append('video', fs.createReadStream(localVideoPath), {
@@ -443,17 +346,15 @@ async function ztteam_processVideoJobOnMuse(job, target) {
       ztteam_log(`Không thể báo lỗi lên VPS: ${apiErr.message}`);
     }
 
-    /** TỰ ĐỘNG DỌN DẸP KHUNG CHAT: Làm mới tab Muse.ai ngay lập tức để không lưu rác/ảnh kẹt cho Job tiếp theo */
+    /** Dọn sạch nội dung thừa trong ô nhập liệu bằng phím (tuyệt đối không chuyển tab) */
     if (browser) {
       try {
         const pages = await browser.pages();
-        const page = pages.find(p => p.url().includes('muse.ai'));
+        const page = pages.find(p => p.url().includes('muse.ai')) || pages[0];
         if (page) {
-          await ztteam_resetMusePage(page);
+          await ztteam_cleanComposer(page);
         }
-      } catch (cleanErr) {
-        ztteam_log(`Lỗi khi dọn dẹp tab Muse: ${cleanErr.message}`);
-      }
+      } catch (cleanErr) {}
     }
 
     /** Nghỉ an toàn 60 giây sau khi gặp lỗi để tab Muse ổn định */
@@ -518,7 +419,7 @@ console.log(`🖥️ Chrome Target : ${CHROME_DEBUG_URL}`);
 console.log(`⏱️ Chu kỳ kiểm tra: mỗi ${POLL_INTERVAL_MS / 1000}s`);
 console.log(`⏱️ Protocol Timeout: ${CDP_PROTOCOL_TIMEOUT_MS / 60000} phút`);
 console.log(`📁 File nhật ký   : ${LOG_FILE}`);
-console.log('🛡️ Cơ chế: Chống dồn ảnh 100%, tự động làm sạch khung chat!');
+console.log('🛡️ Cơ chế: Nguyên bản đơn giản, không mở tab mới, nhập chuẩn xác!');
 console.log('========================================================\n');
 
 /** Chạy ngay lần đầu và duy trì chu kỳ polling */
