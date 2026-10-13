@@ -85,14 +85,46 @@ async function ztteam_isChromeRunning() {
   }
 }
 
-/** Hàm dọn dẹp và reset giao diện Muse.ai về trạng thái trắng sạch */
+/** Hàm dọn dẹp trực tiếp các phần tử trong khung chat Muse.ai */
+async function ztteam_cleanComposerDOM(page) {
+  if (!page) return;
+  try {
+    await page.evaluate(() => {
+      /** 1. Reset giá trị textarea */
+      const ta = document.querySelector('textarea');
+      if (ta) {
+        ta.value = '';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      /** 2. Click tất cả các nút Xóa / Hủy preview ảnh đính kèm nếu có */
+      const removeBtns = document.querySelectorAll(
+        'button[aria-label*="xóa" i], button[aria-label*="remove" i], button[aria-label*="delete" i], button[aria-label*="hủy" i], div[class*="preview"] button, div[class*="attachment"] button'
+      );
+      removeBtns.forEach(b => b.click());
+
+      /** 3. Reset input file */
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      fileInputs.forEach(i => { i.value = ''; });
+    });
+  } catch (e) {}
+}
+
+/** Hàm dọn dẹp và reset giao diện Muse.ai về trạng thái trắng sạch (2 tầng: DOM + Reload) */
 async function ztteam_resetMusePage(page) {
   if (!page) return;
   try {
     ztteam_log('🧹 Đang làm mới tab Muse.ai để đảm bảo khung chat sạch 100%...');
+    /** Tầng 1: Xóa nhanh trên DOM */
+    await ztteam_cleanComposerDOM(page);
+
+    /** Tầng 2: Reload trang về URL gốc để reset toàn bộ React state */
     await page.goto('https://muse.ai/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('textarea', { timeout: 20000 });
     await new Promise(r => setTimeout(r, 2000));
+
+    /** Tầng 3: Kiểm tra làm sạch lần cuối */
+    await ztteam_cleanComposerDOM(page);
   } catch (err) {
     ztteam_log(`⚠️ Không thể reload tab Muse: ${err.message}`);
   }
@@ -209,7 +241,17 @@ async function ztteam_processVideoJobOnMuse(job, target) {
 
     while (Date.now() - sendWaitStart < 25000) {
       const sendResult = await page.evaluate(() => {
-        const sendBtn = document.querySelector('button[aria-label="Gửi"], button[type="submit"]:not([aria-label="Đính kèm file"])');
+        /** Tìm kiếm nút gửi thông minh đa ngôn ngữ */
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        const sendBtn = allButtons.find(b => {
+          const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+          const title = (b.getAttribute('title') || '').toLowerCase();
+          const text = (b.innerText || '').toLowerCase();
+          const isSend = aria.includes('gửi') || aria.includes('send') || title.includes('gửi') || title.includes('send') || text.includes('gửi') || text.includes('send') || b.type === 'submit';
+          const isNotAttach = !aria.includes('đính kèm') && !aria.includes('attach') && !aria.includes('tải lên') && !aria.includes('upload');
+          return isSend && isNotAttach;
+        }) || document.querySelector('button[type="submit"]:not([aria-label*="Đính kèm"])');
+
         if (sendBtn && !sendBtn.disabled) {
           sendBtn.click();
           return { clicked: true, disabled: false };
@@ -229,7 +271,8 @@ async function ztteam_processVideoJobOnMuse(job, target) {
         }
       }
 
-      /** Thử phím Enter */
+      /** Focus textarea và thử phím Enter */
+      await textarea.click();
       await page.keyboard.press('Enter');
       await new Promise(r => setTimeout(r, 1200));
 
